@@ -1,6 +1,0 @@
-#Here are the required packages for the Discord Bot
-PyNaCl
-discord.py
-python-dotenv
-yt-dlp
-FFmpeg -> https://ffmpeg.org/download.html
