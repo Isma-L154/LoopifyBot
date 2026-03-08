@@ -25,6 +25,7 @@ class Music(commands.Cog):
 
         if not track:
             await ctx.send(embed=info_embed("Queue Ended", "No more tracks in queue. Use `!play` to add more!"))
+            asyncio.ensure_future(self._inactivity_checker(ctx))  
             return
 
         # Lazy resolve for Spotify stubs
@@ -268,6 +269,39 @@ class Music(commands.Cog):
         if isinstance(error, commands.BadArgument):
             await ctx.send(embed=error_embed("Please provide a number between 0 and 100."))
 
+    @commands.Cog.listener()
+    async def on_voice_state_update(self, member, before, after):
+        """Auto-disconnect when channel is empty or bot is alone."""
+        if member.bot:
+            return
 
+        vc = member.guild.voice_client
+        if not vc:
+            return
+
+        if len(vc.channel.members) == 1:
+            await asyncio.sleep(60)
+            if vc.is_connected() and len(vc.channel.members) == 1:
+                gq = queue_manager.get(member.guild.id)
+                gq.clear()
+                gq.current = None
+                await vc.disconnect()
+                queue_manager.delete(member.guild.id)
+
+    async def _inactivity_checker(self, ctx):
+        """Disconnect after 5 minutes of inactivity."""
+        await asyncio.sleep(300)  # 5 minutos
+        vc = ctx.voice_client
+        if not vc:
+          return
+        gq = queue_manager.get(ctx.guild.id)
+        # Si no está reproduciendo nada, desconectar
+        if not vc.is_playing() and not vc.is_paused():
+          gq.clear()
+          gq.current = None
+          await vc.disconnect()
+          queue_manager.delete(ctx.guild.id)
+          await ctx.send(embed=info_embed("Disconnected", "Left the voice channel due to inactivity."))
+                
 async def setup(bot):
     await bot.add_cog(Music(bot))

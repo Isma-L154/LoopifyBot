@@ -1,5 +1,6 @@
 import asyncio
 import yt_dlp
+import os
 from typing import Optional
 
 
@@ -11,19 +12,21 @@ FFMPEG_OPTIONS = {
     "options": "-vn",
 }
 
-# yt-dlp config — best audio, no playlist by default
+# yt-dlp config — best audio, no playlist by default, quiet, search support, and some fixes for common issues
 YTDL_OPTIONS = {
-    "format": "bestaudio/best",
+    "format": "bestaudio[ext=webm]/bestaudio[ext=m4a]/bestaudio/best",
     "noplaylist": True,
     "quiet": True,
     "no_warnings": True,
     "default_search": "ytsearch",
     "source_address": "0.0.0.0",
-    "postprocessors": [{
-        "key": "FFmpegExtractAudio",
-        "preferredcodec": "opus",
-    }],
+    "remote_components": ["ejs:npm"],
+    "js_runtimes": {"bun": {}},
 }
+
+cookies_path = os.getenv("COOKIES_PATH")
+if cookies_path and os.path.exists(cookies_path):
+    YTDL_OPTIONS["cookiefile"] = cookies_path
 
 
 def _build_track(info: dict, original_query: str = "") -> dict:
