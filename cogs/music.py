@@ -28,12 +28,21 @@ class Music(commands.Cog):
             asyncio.ensure_future(self._inactivity_checker(ctx))  
             return
 
-        # Lazy resolve for Spotify stubs
+        # Lazy resolve para Spotify
         if track.get("source") == "spotify" and not track.get("stream"):
             track = await spotify.resolve_track(track, loop=self.bot.loop)
             if not track:
                 await ctx.send(embed=error_embed("Couldn't resolve Spotify track. Skipping..."))
                 return await self._play_next(ctx)
+            gq.current = track
+
+        if track.get("source") == "youtube":
+            refreshed = await youtube.search(track.get("url") or track.get("query"), loop=self.bot.loop)
+            if not refreshed:
+                await ctx.send(embed=error_embed(f"Couldn't load **{track['title']}**. Skipping..."))
+                return await self._play_next(ctx)
+            refreshed["title"] = track["title"]
+            track = refreshed
             gq.current = track
 
         source = youtube.make_source(track["stream"], volume=gq.volume)
