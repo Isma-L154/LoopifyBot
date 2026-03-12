@@ -46,7 +46,10 @@ class Music(commands.Cog):
             gq.current = track
 
         source = youtube.make_source(track["stream"], volume=gq.volume)
-
+        if source is None:
+            await ctx.send(embed=error_embed(f"Failed to load **{track['title']}**. Skipping..."))
+            return await self._play_next(ctx)
+        
         def after(error):
             if error:
                 print(f"[Player] Error: {error}")
