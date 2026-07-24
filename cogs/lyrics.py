@@ -1,6 +1,6 @@
 from discord.ext import commands
 from services import lyrics_api
-from utils.queue_manager import queue_manager
+from utils.player import players
 from utils.embeds import lyrics_embed, error_embed
 
 
@@ -27,14 +27,16 @@ class Lyrics(commands.Cog):
                 else:
                     title = query.strip()
             else:
-                # Fall back to current playing track
-                gq = queue_manager.get(ctx.guild.id)
-                if not gq.current:
+                # Fall back to the currently playing track.
+                player = players.get(ctx.guild.id)
+                if not player or not player.current:
                     return await ctx.send(embed=error_embed(
                         "Nothing is playing. Provide a song name: `!lyrics <title>`"
                     ))
-                title = gq.current["title"]
-                artist = gq.current.get("uploader", "")
+                current = player.current
+                # Spotify titles are "Song — Artist"; split for a cleaner search.
+                title = current["title"].split(" — ")[0].strip()
+                artist = current.get("uploader", "")
 
             result = await lyrics_api.fetch(title, artist, loop=self.bot.loop)
 

@@ -1,13 +1,14 @@
 # 🎵 Discord Music Bot
 
-A fully-featured Discord music bot built with Python. Supports YouTube and Spotify playback, queue management, audio effects, and lyrics — all through simple text commands.
+A fully-featured Discord music bot built with Python. Supports YouTube and SoundCloud playback, queue management, audio effects, and lyrics — all through simple text commands.
 
 ---
 
 ## ✨ Features
 
 - 🎬 **YouTube** — Play songs by name or URL, including full playlists
-- 🟢 **Spotify** — Play tracks, albums, and playlists from Spotify links
+- 🟠 **SoundCloud** — Play tracks, sets and search with the `sc:` prefix
+- 🔗 **Direct links** — Any of the 1000+ sites yt-dlp supports, plus raw audio URLs
 - 📋 **Queue system** — Full queue management with shuffle, loop, and history
 - 🎛️ **Audio effects** — Bass boost, nightcore, vaporwave, 8D audio, echo, and more
 - 🎤 **Lyrics** — Fetch lyrics for any song via Genius
@@ -23,7 +24,7 @@ A fully-featured Discord music bot built with Python. Supports YouTube and Spoti
 
 | Command | Description |
 |---|---|
-| `!play <song/url>` | Play a song from YouTube or Spotify (track, album, playlist) |
+| `!play <song/url>` | Play from YouTube/SoundCloud (search, track, playlist) or a link |
 | `!pause` | Pause the current track |
 | `!resume` | Resume playback |
 | `!skip` | Skip to the next track |
@@ -75,3 +76,27 @@ A fully-featured Discord music bot built with Python. Supports YouTube and Spoti
 **[Click here to invite the bot](https://discord.com/oauth2/authorize?client_id=1411151372446863491&permissions=36784128&integration_type=0&scope=bot+applications.commands)**
 
 No installation required — the bot is hosted and always online.
+
+---
+
+## 🛠️ Self-hosting
+
+### Requirements
+- Python 3.11+
+- FFmpeg on your PATH
+- A Discord bot token (with the **Message Content** and **Server Members** intents enabled)
+
+### Run locally
+```bash
+python -m venv .venv
+.venv/bin/pip install -r requirements.txt      # Windows: .venv\Scripts\pip
+cp .env.example .env                            # then fill in DISCORD_TOKEN
+python main.py
+```
+
+`!lyrics` is optional — set `GENIUS_TOKEN` in `.env` to enable it.
+
+### Deploy to AWS (t4g.micro, ~$6/mo or free tier)
+See **[deploy/README.md](deploy/README.md)** for a full walkthrough: launch script,
+provisioning (`deploy/setup.sh`) and a `systemd` service that auto-restarts and
+starts on boot.
