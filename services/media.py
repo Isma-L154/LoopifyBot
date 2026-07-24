@@ -234,6 +234,9 @@ def kill_stream(proc: Optional[subprocess.Popen]) -> None:
         return
     try:
         proc.kill()
+        proc.wait(timeout=2)
+    except subprocess.TimeoutExpired:
+        pass
     except Exception:
         pass
 
