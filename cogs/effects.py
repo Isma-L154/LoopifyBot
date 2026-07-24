@@ -13,7 +13,7 @@ _EFFECT_COOLDOWN = 3.0
 
 
 # FFmpeg audio-filter presets. Each restarts the current track through
-# ``-af <filter>`` while resuming near the current playback position.
+# ``-af <filter>`` (from the beginning).
 EFFECTS = {
     "bass":       "equalizer=f=54:width_type=o:width=2:g=5",     # gentle low-end lift
     "bassboost":  "equalizer=f=54:width_type=o:width=2:g=10",    # heavy low-end lift
