@@ -1,8 +1,16 @@
 import asyncio
+import logging
+
 import discord
 from discord.ext import commands
+
+import config
 from config import DISCORD_TOKEN, COMMAND_PREFIX, COGS
 
+config.configure_logging()
+config.validate()
+
+log = logging.getLogger("loopify")
 
 intents = discord.Intents.default()
 intents.message_content = True
@@ -11,7 +19,8 @@ intents.voice_states = True
 bot = commands.Bot(
     command_prefix=COMMAND_PREFIX,
     intents=intents,
-    help_command=None   # We'll add a custom one below
+    help_command=None,        # custom help below
+    case_insensitive=True,
 )
 
 
@@ -19,22 +28,25 @@ bot = commands.Bot(
 
 @bot.event
 async def on_ready():
-    print(f"✅ Logged in as {bot.user} (ID: {bot.user.id})")
+    log.info("Logged in as %s (ID: %s) — serving %d guild(s)",
+             bot.user, bot.user.id, len(bot.guilds))
     await bot.change_presence(
         activity=discord.Activity(
             type=discord.ActivityType.listening,
-            name=f"{COMMAND_PREFIX}play"
+            name=f"{COMMAND_PREFIX}play",
         )
     )
 
 
 @bot.event
 async def on_command_error(ctx, error):
-    if isinstance(error, commands.CommandNotFound):
-        return  # Silently ignore unknown commands
-    if isinstance(error, commands.CheckFailure):
-        return  # Checks already send their own error embeds
-    print(f"[Error] {ctx.command}: {error}")
+    # Unwrap the original exception where discord.py wrapped it.
+    error = getattr(error, "original", error)
+    if isinstance(error, (commands.CommandNotFound, commands.CheckFailure)):
+        return                # unknown command / checks send their own errors
+    if isinstance(error, commands.MissingRequiredArgument):
+        return                # per-command handlers deal with these
+    log.warning("Error in command %s: %s", ctx.command, error)
 
 
 # ── Custom help command ───────────────────────────────────────────────
@@ -43,40 +55,27 @@ async def on_command_error(ctx, error):
 async def help_command(ctx):
     p = COMMAND_PREFIX
     embed = discord.Embed(title="🎵 Music Bot — Commands", color=0x1DB954)
-
     embed.add_field(name="▶️ Playback", value=(
-        f"`{p}play <song/url>` — Play from YouTube or Spotify\n"
-        f"`{p}pause` — Pause\n"
-        f"`{p}resume` — Resume\n"
-        f"`{p}skip` — Skip current track\n"
-        f"`{p}previous` — Go back one track\n"
+        f"`{p}play <song/url>` — Play from YouTube, SoundCloud or a link\n"
+        f"`{p}pause` · `{p}resume` · `{p}skip` · `{p}previous`\n"
         f"`{p}stop` — Stop & disconnect\n"
         f"`{p}nowplaying` — Show current track"
     ), inline=False)
-
     embed.add_field(name="📋 Queue", value=(
-        f"`{p}queue [page]` — View queue\n"
-        f"`{p}shuffle` — Shuffle queue\n"
-        f"`{p}remove <#>` — Remove a track\n"
-        f"`{p}move <from> <to>` — Move a track\n"
-        f"`{p}clear` — Clear queue\n"
-        f"`{p}loop <track|queue|off>` — Loop mode\n"
-        f"`{p}autoplay` — Toggle autoplay"
+        f"`{p}queue [page]` · `{p}shuffle` · `{p}remove <#>`\n"
+        f"`{p}move <from> <to>` · `{p}clear`\n"
+        f"`{p}loop <track|queue|off>` · `{p}autoplay`"
     ), inline=False)
-
     embed.add_field(name="🎛️ Effects", value=(
-        f"`{p}bass` `{p}bassboost` `{p}nightcore`\n"
-        f"`{p}vaporwave` `{p}treble` `{p}echo`\n"
-        f"`{p}8d` `{p}karaoke` `{p}reset`\n"
+        f"`{p}bass` `{p}bassboost` `{p}nightcore` `{p}vaporwave`\n"
+        f"`{p}treble` `{p}echo` `{p}8d` `{p}karaoke` `{p}reset`\n"
         f"`{p}effects` — List all effects"
     ), inline=False)
-
     embed.add_field(name="🎤 Extras", value=(
         f"`{p}lyrics [song]` — Get song lyrics\n"
         f"`{p}volume <0-100>` — Set volume"
     ), inline=False)
-
-    embed.set_footer(text="Tip: !play works with YouTube URLs, Spotify tracks, albums & playlists!")
+    embed.set_footer(text=f"Tip: {p}play works with YouTube & Spotify tracks, albums & playlists!")
     await ctx.send(embed=embed)
 
 
@@ -87,10 +86,14 @@ async def main():
         for cog in COGS:
             try:
                 await bot.load_extension(cog)
-                print(f"✅ Loaded cog: {cog}")
-            except Exception as e:
-                print(f"❌ Failed to load {cog}: {e}")
+                log.info("Loaded cog: %s", cog)
+            except Exception:
+                log.exception("Failed to load cog: %s", cog)
         await bot.start(DISCORD_TOKEN)
 
 
-asyncio.run(main())
+if __name__ == "__main__":
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        log.info("Shutting down (KeyboardInterrupt).")

@@ -134,6 +134,12 @@ celerybeat.pid
 # SageMath parsed files
 *.sage.py
 
+# Project-specific: AI assistant notes & sensitive runtime files
+CLAUDE.md
+.claude/
+cookies.txt
+*.pem
+
 # Environments
 .env
 .envrc

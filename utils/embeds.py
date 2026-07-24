@@ -8,10 +8,12 @@ def format_duration(seconds: int) -> str:
     return str(timedelta(seconds=seconds))
 
 
-def now_playing_embed(track: dict, requester: discord.Member, loop_mode: str = "off") -> discord.Embed:
+def now_playing_embed(track: dict, requester: discord.abc.User, loop_mode: str = "off") -> discord.Embed:
+    url = track.get("url") or track.get("spotify_url")
+    title = f"[{track['title']}]({url})" if url else track["title"]
     embed = discord.Embed(
         title="🎵 Now Playing",
-        description=f"**[{track['title']}]({track['url']})**",
+        description=f"**{title}**",
         color=0x1DB954
     )
     embed.add_field(name="⏱ Duration", value=format_duration(track.get("duration")), inline=True)
