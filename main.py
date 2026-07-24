@@ -75,7 +75,7 @@ async def help_command(ctx):
         f"`{p}lyrics [song]` — Get song lyrics\n"
         f"`{p}volume <0-100>` — Set volume"
     ), inline=False)
-    embed.set_footer(text=f"Tip: {p}play works with YouTube & Spotify tracks, albums & playlists!")
+    embed.set_footer(text=f"Tip: {p}play works with YouTube/SoundCloud searches (use sc:) and most links yt-dlp supports!")
     await ctx.send(embed=embed)
 
 
