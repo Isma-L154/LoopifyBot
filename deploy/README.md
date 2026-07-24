@@ -15,7 +15,7 @@ streaming is CPU-light and memory-frugal thanks to lazy stream resolution, so
 | Security group  | inbound SSH (22) from your IP only; all outbound |
 | Service         | `loopify-bot` (systemd, auto-restart, boot-start)|
 
-The bot makes only **outbound** connections (Discord, YouTube, Spotify), so no
+The bot makes only **outbound** connections (Discord, YouTube, SoundCloud), so no
 inbound ports beyond SSH are required.
 
 ## 1. Launch the instance
