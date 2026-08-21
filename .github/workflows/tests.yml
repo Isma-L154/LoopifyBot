@@ -22,6 +22,15 @@ jobs:
           python-version: ${{ matrix.python-version }}
           cache: pip
 
+      - name: Install FFmpeg
+        # tests/test_effect_filters.py renders real audio to verify the filter
+        # presets. Without FFmpeg those tests skip silently, which would let a
+        # broken filter through CI.
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends ffmpeg
+          ffmpeg -version | head -1
+
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
@@ -29,4 +38,5 @@ jobs:
 
       - name: Run tests
         # The suite needs no credentials, no network and no .env.
-        run: pytest
+        # -ra surfaces anything that skipped, so silent skips stay visible.
+        run: pytest -ra

@@ -17,8 +17,12 @@ _EFFECT_COOLDOWN = 3.0
 EFFECTS = {
     "bass":       "equalizer=f=54:width_type=o:width=2:g=5",     # gentle low-end lift
     "bassboost":  "equalizer=f=54:width_type=o:width=2:g=10",    # heavy low-end lift
-    "nightcore":  "asetrate=48000*1.25,aresample=48000",         # +pitch, +speed
-    "vaporwave":  "asetrate=48000*0.8,aresample=48000",          # -pitch, -speed
+    # The leading `aresample=48000` is load-bearing: `asetrate` *reinterprets* a
+    # stream's declared rate instead of scaling it, so without normalising first
+    # the speed factor becomes 48000*N/<source rate> and differs per track. A
+    # 44.1 kHz upload ran at 1.36x and a 22 kHz one at 2.72x, not 1.25x.
+    "nightcore":  "aresample=48000,asetrate=48000*1.25,aresample=48000",  # +pitch, +speed
+    "vaporwave":  "aresample=48000,asetrate=48000*0.8,aresample=48000",   # -pitch, -speed
     "treble":     "equalizer=f=8000:width_type=o:width=2:g=5",   # high-end lift
     "echo":       "aecho=0.8:0.88:60:0.4",                       # short echo
     "karaoke":    "pan=stereo|c0=c0-c1|c1=c1-c0",                # cancel centre vocals
