@@ -1,14 +1,10 @@
 """
 Pure helpers in ``services.media``.
 
-Nothing here touches the network or spawns a real yt-dlp: these cover the
-parsing and process-handling code that decides what gets searched and how a
-failure is reported back to the user.
+Nothing here touches the network or spawns a process: these cover the parsing
+that decides what gets searched and how a yt-dlp result becomes a track.
+Process handling lives in ``tests/test_audio_stream.py``.
 """
-
-import io
-import subprocess
-from unittest.mock import MagicMock
 
 import pytest
 
@@ -114,64 +110,6 @@ def test_first_entry_passes_through_a_single_result():
     assert media._first_entry({"title": "Solo"})["title"] == "Solo"
 
 
-# ── failure classification ────────────────────────────────────────────
-
-def _finished_proc(stderr: bytes) -> MagicMock:
-    proc = MagicMock(spec=subprocess.Popen)
-    proc.stderr = io.BytesIO(stderr)
-    return proc
-
-
-@pytest.mark.parametrize("stderr", [
-    b"ERROR: Sign in to confirm you're not a bot",
-    b"ERROR: SIGN IN TO CONFIRM you are not a bot",
-    b"please confirm you're not a bot to continue",
-])
-def test_bot_checks_are_classified_as_blocked(stderr):
-    assert media.classify_stream_error(_finished_proc(stderr)) == "blocked"
-
-
-@pytest.mark.parametrize("stderr", [
-    b"ERROR: Video unavailable",
-    b"ERROR: Private video",
-    b"",
-])
-def test_other_failures_are_classified_as_unavailable(stderr):
-    assert media.classify_stream_error(_finished_proc(stderr)) == "unavailable"
-
-
-def test_classify_handles_a_missing_process():
-    assert media.classify_stream_error(None) == "unavailable"
-
-
-def test_classify_survives_undecodable_stderr():
-    """yt-dlp can emit non-UTF-8 bytes; classification must not raise."""
-    assert media.classify_stream_error(_finished_proc(b"\xff\xfe invalid")) == "unavailable"
-
-
-# ── process teardown ──────────────────────────────────────────────────
-
-def test_kill_stream_accepts_none():
-    media.kill_stream(None)        # must not raise
-
-
-def test_kill_stream_leaves_an_already_finished_process_alone():
-    proc = MagicMock(spec=subprocess.Popen)
-    proc.poll.return_value = 0
-    media.kill_stream(proc)
-    proc.kill.assert_not_called()
-
-
-def test_kill_stream_kills_a_running_process():
-    proc = MagicMock(spec=subprocess.Popen)
-    proc.poll.return_value = None
-    media.kill_stream(proc)
-    proc.kill.assert_called_once()
-
-
-def test_kill_stream_is_idempotent():
-    proc = MagicMock(spec=subprocess.Popen)
-    proc.poll.side_effect = [None, 0]     # running, then dead
-    media.kill_stream(proc)
-    media.kill_stream(proc)
-    assert proc.kill.call_count == 1
+# Process teardown and failure classification moved to AudioStream when the
+# stderr-deadlock fix landed; they are covered against real subprocesses in
+# tests/test_audio_stream.py.
