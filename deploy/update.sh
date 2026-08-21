@@ -20,12 +20,27 @@ if [[ ! -d .git ]]; then
    That happens when the code was copied over with rsync. To convert it in
    place, from the app directory:
 
-     git init
+     git init -b main
      git remote add origin https://github.com/Isma-L154/LoopifyBot.git
      git fetch origin
+     git branch --set-upstream-to=origin/main main
      git reset --hard origin/main      # discards local edits — check first!
 
    Your .env and cookies.txt are gitignored and will not be touched.
+MSG
+    exit 1
+fi
+
+if ! git rev-parse --abbrev-ref '@{upstream}' >/dev/null 2>&1; then
+    branch="$(git rev-parse --abbrev-ref HEAD)"
+    cat >&2 <<MSG
+!! Branch '$branch' has no upstream, so there is nothing to pull from.
+
+   This happens on a host converted from a file copy rather than cloned. Set it
+   once:
+
+     git branch --set-upstream-to=origin/main $branch
+
 MSG
     exit 1
 fi

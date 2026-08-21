@@ -71,11 +71,15 @@ printing recent logs and failing loudly if it did not.
 version, from the app directory:
 
 ```bash
-git init
+git init -b main
 git remote add origin https://github.com/Isma-L154/LoopifyBot.git
 git fetch origin
+git branch --set-upstream-to=origin/main main
 git reset --hard origin/main     # discards local edits — check first
 ```
+
+The `--set-upstream-to` line matters: without it `update.sh` has nothing to pull
+from and stops with an explanation.
 
 `.env` and `cookies.txt` are gitignored, so they survive this untouched.
 
