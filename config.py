@@ -9,7 +9,16 @@ from typing import Optional
 
 from dotenv import load_dotenv
 
-load_dotenv()
+# python-dotenv is the single owner of .env — the systemd unit deliberately does
+# not set EnvironmentFile, because the two parsers disagree about quoting and
+# inline comments, and a value they disagree on fails silently and looks like a
+# bad credential.
+#
+# The path is anchored to the project root rather than left to search upward
+# from the working directory, so the same file is picked up whether the bot is
+# started by systemd, from a shell anywhere, or by the test runner.
+PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
+load_dotenv(os.path.join(PROJECT_ROOT, ".env"))
 
 # ── Bot ───────────────────────────────────────────────────────────────
 DISCORD_TOKEN  = os.getenv("DISCORD_TOKEN")
@@ -70,9 +79,9 @@ def runtime_versions() -> dict:
     deployed without git, or without FFmpeg on PATH, should still start and say
     so plainly.
     """
-    root = os.path.dirname(os.path.abspath(__file__))
     return {
-        "commit": _first_line(["git", "rev-parse", "--short", "HEAD"], cwd=root) or "unknown",
+        "commit": _first_line(
+            ["git", "rev-parse", "--short", "HEAD"], cwd=PROJECT_ROOT) or "unknown",
         "yt_dlp": _first_line([sys.executable, "-m", "yt_dlp", "--version"]) or "unknown",
         "ffmpeg": _ffmpeg_version(),
         "python": platform.python_version(),
