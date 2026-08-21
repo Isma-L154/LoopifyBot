@@ -21,6 +21,7 @@ Track dict shape::
 import os
 import sys
 import subprocess
+import tempfile
 import asyncio
 import logging
 from typing import Optional
@@ -194,13 +195,127 @@ def _stream_target(track: dict) -> str:
     return target
 
 
-def spawn_stream(track: dict) -> subprocess.Popen:
-    """
-    Start a yt-dlp subprocess that writes the track's best audio to stdout.
+# How much of yt-dlp's stderr to inspect when a stream produced no audio.
+# The real error is written last, and a throttled download can emit megabytes of
+# progress noise ahead of it, so only the tail is worth reading.
+_STDERR_TAIL_BYTES = 16 * 1024
 
-    The returned process' ``stdout`` is meant to feed ``make_pipe_source``.
-    Caller owns the process and MUST ``kill_stream`` it when playback ends.
+# Phrases YouTube uses when it wants a signed-in session (i.e. fresh cookies).
+_BOT_CHECK_MARKERS = ("not a bot", "sign in to confirm")
+
+# Longest we wait for a SIGKILLed yt-dlp to actually disappear.
+_REAP_TIMEOUT = 5.0
+
+
+def _close_quietly(handle) -> None:
+    """Close a pipe/file, ignoring anything that goes wrong during teardown."""
+    if handle is None:
+        return
+    try:
+        handle.close()
+    except Exception:
+        pass
+
+
+class AudioStream:
     """
+    A running ``yt-dlp`` process writing one track's audio to a pipe.
+
+    ``stdout`` feeds :func:`make_pipe_source`. The caller owns the stream and
+    MUST :meth:`close` it when playback ends, is skipped, or the player is
+    destroyed — otherwise the child is never reaped.
+
+    Two deliberate choices about the child's streams:
+
+    * **stdout is a pipe.** That is what bounds memory on a small host: yt-dlp
+      blocks as soon as FFmpeg stops reading, instead of buffering a whole
+      track in RAM.
+    * **stderr is a temporary file, never a pipe.** Nothing reads stderr while
+      the track plays, so a pipe whose ~64 KB kernel buffer filled up would
+      block yt-dlp mid-write, starve FFmpeg and stall playback silently.
+      Writing to a file never blocks.
+
+    :meth:`close` and :meth:`classify_error` may both block briefly (waiting on
+    the child, reading the file), so call them from an executor, never straight
+    from the event loop.
+    """
+
+    __slots__ = ("_proc", "_errfile", "_error", "_closed")
+
+    def __init__(self, proc: subprocess.Popen, errfile) -> None:
+        self._proc = proc
+        self._errfile = errfile
+        self._error: Optional[str] = None
+        self._closed = False
+
+    @classmethod
+    def launch(cls, cmd: list[str]) -> "AudioStream":
+        """Spawn ``cmd`` with the stdout/stderr wiring described above."""
+        errfile = tempfile.TemporaryFile()
+        try:
+            proc = subprocess.Popen(
+                cmd,
+                stdout=subprocess.PIPE,
+                stderr=errfile,
+                bufsize=64 * 1024,      # large buffer smooths delivery to FFmpeg
+            )
+        except Exception:
+            _close_quietly(errfile)
+            raise
+        return cls(proc, errfile)
+
+    @property
+    def stdout(self):
+        """The audio pipe, or ``None`` once the stream has been closed."""
+        return None if self._closed else self._proc.stdout
+
+    def close(self) -> None:
+        """Kill the process, reap it and release both handles. Idempotent."""
+        if self._closed:
+            return
+        self._closed = True
+        proc = self._proc
+        try:
+            if proc.poll() is None:
+                try:
+                    proc.kill()
+                except OSError:
+                    pass                # already gone between poll and kill
+            try:
+                proc.wait(timeout=_REAP_TIMEOUT)
+            except subprocess.TimeoutExpired:
+                log.warning("yt-dlp (pid %s) survived SIGKILL; not reaped", proc.pid)
+            # Read the error while the file is still open — the player asks for
+            # the reason only after the stream has been torn down.
+            self._error = self._read_error()
+        finally:
+            _close_quietly(proc.stdout)
+            _close_quietly(self._errfile)
+
+    def classify_error(self) -> str:
+        """
+        Why this stream produced no audio.
+
+        ``"blocked"`` means YouTube demanded a signed-in session and the cookies
+        need refreshing; ``"unavailable"`` covers everything else. Safe to call
+        before or after :meth:`close`, and repeatable.
+        """
+        err = self._error if self._error is not None else self._read_error()
+        return "blocked" if any(m in err for m in _BOT_CHECK_MARKERS) else "unavailable"
+
+    def _read_error(self) -> str:
+        """The tail of the child's stderr, lowercased. Never raises."""
+        try:
+            self._errfile.seek(0, os.SEEK_END)
+            start = max(0, self._errfile.tell() - _STDERR_TAIL_BYTES)
+            self._errfile.seek(start)
+            return self._errfile.read().decode("utf-8", "ignore").lower()
+        except Exception:
+            return ""
+
+
+def spawn_stream(track: dict) -> AudioStream:
+    """Start streaming a track's best audio through yt-dlp."""
     cmd = [
         sys.executable, "-m", "yt_dlp",
         "-f", "bestaudio/best",
@@ -213,11 +328,7 @@ def spawn_stream(track: dict) -> subprocess.Popen:
     if cookies:
         cmd += ["--cookies", cookies]
     cmd.append(_stream_target(track))
-    # Large stdout buffer smooths delivery to FFmpeg; stderr captured for errors.
-    return subprocess.Popen(
-        cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-        bufsize=64 * 1024,
-    )
+    return AudioStream.launch(cmd)
 
 
 def make_pipe_source(stdin, *, volume: float = 0.5, ffmpeg_filter: str = ""):
@@ -226,33 +337,3 @@ def make_pipe_source(stdin, *, volume: float = 0.5, ffmpeg_filter: str = ""):
     options = f"-vn -af {ffmpeg_filter}" if ffmpeg_filter else "-vn"
     source = discord.FFmpegPCMAudio(stdin, pipe=True, options=options)
     return discord.PCMVolumeTransformer(source, volume=volume)
-
-
-def kill_stream(proc: Optional[subprocess.Popen]) -> None:
-    """Terminate a yt-dlp streaming process and reap it (idempotent)."""
-    if proc is None or proc.poll() is not None:
-        return
-    try:
-        proc.kill()
-        proc.wait(timeout=2)
-    except subprocess.TimeoutExpired:
-        pass
-    except Exception:
-        pass
-
-
-def classify_stream_error(proc: Optional[subprocess.Popen]) -> str:
-    """
-    Read a finished yt-dlp process' stderr and classify why it produced no audio.
-
-    Returns "blocked" (YouTube bot-check — needs fresh cookies), or "unavailable".
-    """
-    if proc is None:
-        return "unavailable"
-    try:
-        err = (proc.stderr.read() or b"").decode("utf-8", "ignore").lower() if proc.stderr else ""
-    except Exception:
-        err = ""
-    if "not a bot" in err or "sign in to confirm" in err:
-        return "blocked"
-    return "unavailable"

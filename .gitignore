@@ -134,6 +134,11 @@ celerybeat.pid
 # SageMath parsed files
 *.sage.py
 
+# yt-dlp fragment artifacts: streaming to stdout can drop these in the CWD.
+--Frag*
+*.part
+*.ytdl
+
 # Project-specific: AI assistant notes & sensitive runtime files
 CLAUDE.md
 .claude/
