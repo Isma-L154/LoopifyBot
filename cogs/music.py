@@ -269,21 +269,8 @@ class Music(commands.Cog):
 
     # ── Errors & lifecycle ────────────────────────────────────────────
 
-    @play.error
-    async def play_error(self, ctx, error):
-        if isinstance(error, commands.MissingRequiredArgument):
-            await ctx.send(embed=error_embed("Please provide a song name or URL.\nUsage: `!play <song>`"))
-        elif isinstance(error, commands.CommandOnCooldown):
-            await ctx.send(embed=error_embed(
-                f"Slow down — try again in {error.retry_after:.1f}s."
-            ))
-        elif isinstance(error, commands.MaxConcurrencyReached):
-            await ctx.send(embed=error_embed("You already have a `!play` in progress."))
-
-    @volume.error
-    async def volume_error(self, ctx, error):
-        if isinstance(error, commands.BadArgument):
-            await ctx.send(embed=error_embed("Please provide a number between 0 and 100."))
+    # Missing/bad arguments, cooldowns and concurrency limits are handled
+    # centrally in utils.errors, so every command reports them the same way.
 
     @commands.Cog.listener()
     async def on_voice_state_update(self, member, before, after):
