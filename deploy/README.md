@@ -26,19 +26,21 @@ configured, or follow it step by step.
 
 ## 2. Provision it
 
-Copy the project to the instance (excluding secrets/venv) and run the setup
-script, which installs `ffmpeg` + Python, builds a venv, and installs the
-`loopify-bot` systemd service:
+**Clone** the repo on the instance — do not copy the files over. A git checkout
+is what makes `deploy/update.sh` work later and lets the bot report which commit
+it is running:
 
 ```bash
-# from your laptop, in the repo root
-rsync -av --exclude .venv --exclude .git --exclude __pycache__ \
-      -e "ssh -i <key>.pem" ./ ubuntu@<EC2_IP>:~/LoopifyBot/
-
 ssh -i <key>.pem ubuntu@<EC2_IP>
+
+git clone https://github.com/Isma-L154/LoopifyBot.git ~/LoopifyBot
 cd ~/LoopifyBot
 bash deploy/setup.sh
 ```
+
+`setup.sh` installs `ffmpeg` + Python + Deno, builds a venv, and registers two
+systemd units: the `loopify-bot` service and a daily `loopify-ytdlp-update`
+timer. It is idempotent, so re-running it is safe.
 
 ## 3. Add secrets and start
 
@@ -56,9 +58,63 @@ sudo journalctl -u loopify-bot -f      # live logs — look for "Logged in as ..
 
 ```bash
 ssh -i <key>.pem ubuntu@<EC2_IP>
-cd ~/LoopifyBot && git pull            # or rsync again
-sudo systemctl restart loopify-bot
+cd ~/LoopifyBot && bash deploy/update.sh
 ```
+
+`update.sh` pulls, reinstalls dependencies **only if `requirements.txt`
+changed**, restarts the service, and then verifies it actually came back up —
+printing recent logs and failing loudly if it did not.
+
+### If the host was deployed by copying files instead of cloning
+
+`update.sh` refuses to run and tells you how to convert it in place. The short
+version, from the app directory:
+
+```bash
+git init -b main
+git remote add origin https://github.com/Isma-L154/LoopifyBot.git
+git fetch origin
+git branch --set-upstream-to=origin/main main
+git reset --hard origin/main     # discards local edits — check first
+```
+
+The `--set-upstream-to` line matters: without it `update.sh` has nothing to pull
+from and stops with an explanation.
+
+`.env` and `cookies.txt` are gitignored, so they survive this untouched.
+
+### Knowing what is actually running
+
+The bot logs its versions at startup, so `journalctl` answers this directly:
+
+```
+Running commit 0a90877 — yt-dlp 2026.08.19, FFmpeg 6.1.1-3ubuntu5, Python 3.12.3
+```
+
+```bash
+sudo journalctl -u loopify-bot | grep "Running commit" | tail -1
+```
+
+## Keeping yt-dlp current — automatically
+
+`yt-dlp` is the only dependency deliberately left unpinned. YouTube changes its
+player and extractors constantly, so a stale build starts failing to resolve
+videos within weeks and fails outright within months — a `2026.3.3` build
+returned `HTTP 403` on **every** YouTube URL until it was updated.
+
+`setup.sh` installs a timer that handles this:
+
+```bash
+systemctl list-timers 'loopify-ytdlp-update*'      # when it next runs
+sudo systemctl start loopify-ytdlp-update.service  # force a refresh now
+sudo journalctl -u loopify-ytdlp-update -n 20      # what it did last time
+```
+
+It runs daily with a randomised delay, restarts the bot **only when the version
+actually changed**, and leaves the working version installed if the upgrade
+fails — a newer dependency is never worth trading a running bot for.
+`Persistent=true` means it catches up after downtime rather than silently
+skipping, which matters on a machine that is not on 24/7.
 
 ## 🎬 YouTube from cloud IPs — how it's made to work
 

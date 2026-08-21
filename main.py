@@ -9,6 +9,7 @@ from config import DISCORD_TOKEN, COMMAND_PREFIX, COGS
 from utils import errors
 
 config.configure_logging()
+config.log_runtime()
 config.validate()
 
 log = logging.getLogger("loopify")

@@ -1,0 +1,12 @@
+# Line endings.
+#
+# The deploy scripts are checked out and run on Linux. With CRLF endings bash
+# reads the shebang as `/usr/bin/env bash\r` and refuses the file, so these must
+# stay LF regardless of the platform they were committed from. Same for the
+# systemd unit bodies embedded in them and for the CI workflow.
+*.sh        text eol=lf
+*.yml       text eol=lf
+*.yaml      text eol=lf
+
+# Everything else: normalise to LF in the repository, let git decide locally.
+* text=auto
