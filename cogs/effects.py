@@ -12,8 +12,9 @@ from utils.checks import same_voice_channel
 _EFFECT_COOLDOWN = 3.0
 
 
-# FFmpeg audio-filter presets. Each restarts the current track through
-# ``-af <filter>`` (from the beginning).
+# FFmpeg audio-filter presets. Applying one respawns the stream through
+# ``-af <filter>``, resuming at the current playback position — see
+# ``MusicPlayer.apply_effect``.
 EFFECTS = {
     "bass":       "equalizer=f=54:width_type=o:width=2:g=5",     # gentle low-end lift
     "bassboost":  "equalizer=f=54:width_type=o:width=2:g=10",    # heavy low-end lift

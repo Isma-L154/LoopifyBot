@@ -16,6 +16,7 @@ import subprocess
 import pytest
 
 from cogs.effects import EFFECTS
+from services import media
 
 pytestmark = pytest.mark.skipif(
     shutil.which("ffmpeg") is None, reason="FFmpeg is not installed"
@@ -92,3 +93,54 @@ def test_non_speed_effects_leave_the_duration_alone(name):
 @pytest.mark.parametrize("name", sorted(EFFECTS))
 def test_every_preset_produces_audio(name):
     assert rendered_seconds(EFFECTS[name], 44100) > 0
+
+
+# -- resuming in place, through the real audio path ---------------------
+
+def played_seconds(source) -> float:
+    """Drain a discord AudioSource and return how much audio it yielded."""
+    frames = 0
+    while source.read():
+        frames += 1
+    source.cleanup()
+    return frames * 0.02        # discord consumes 20 ms frames
+
+
+@pytest.fixture
+def tone_file(tmp_path):
+    """A 30-second MP3 on disk, to feed the pipe source from a real file."""
+    path = tmp_path / "tone.mp3"
+    subprocess.run(
+        [
+            "ffmpeg", "-hide_banner", "-loglevel", "error", "-y",
+            "-f", "lavfi",
+            "-i", "sine=frequency=440:sample_rate=44100:duration=30",
+            str(path),
+        ],
+        check=True,
+    )
+    return path
+
+
+@pytest.mark.parametrize("seek,expected_remaining", [
+    (0, 30.0),
+    (10, 20.0),
+    (25, 5.0),
+])
+def test_seeking_starts_playback_partway_in(tone_file, seek, expected_remaining):
+    """
+    The whole point of #9: an effect change respawns FFmpeg, and the new
+    process has to pick up where the listener was rather than at 0:00.
+    """
+    with open(tone_file, "rb") as handle:
+        source = media.make_pipe_source(handle, seek_seconds=seek)
+        assert played_seconds(source) == pytest.approx(expected_remaining, abs=0.3)
+
+
+def test_seeking_and_an_effect_apply_together(tone_file):
+    """A resumed track keeps the effect that triggered the respawn."""
+    with open(tone_file, "rb") as handle:
+        source = media.make_pipe_source(
+            handle, ffmpeg_filter=EFFECTS["bassboost"], seek_seconds=20,
+        )
+        assert played_seconds(source) == pytest.approx(10.0, abs=0.3)

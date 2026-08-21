@@ -331,9 +331,21 @@ def spawn_stream(track: dict) -> AudioStream:
     return AudioStream.launch(cmd)
 
 
-def make_pipe_source(stdin, *, volume: float = 0.5, ffmpeg_filter: str = ""):
-    """Build a ``discord.PCMVolumeTransformer`` that reads audio from a pipe."""
+def make_pipe_source(stdin, *, volume: float = 0.5, ffmpeg_filter: str = "",
+                     seek_seconds: float = 0.0):
+    """
+    Build a ``discord.PCMVolumeTransformer`` that reads audio from a pipe.
+
+    ``seek_seconds`` starts playback partway in, which is what lets an effect
+    change resume where the listener was. It is passed as an *input* option so
+    FFmpeg discards packets without decoding them; on a pipe that is a
+    read-and-discard rather than a real seek, but it costs almost nothing
+    because yt-dlp delivers at network speed rather than in realtime.
+    """
     import discord
     options = f"-vn -af {ffmpeg_filter}" if ffmpeg_filter else "-vn"
-    source = discord.FFmpegPCMAudio(stdin, pipe=True, options=options)
+    before = f"-ss {seek_seconds:.3f}" if seek_seconds > 0 else None
+    source = discord.FFmpegPCMAudio(
+        stdin, pipe=True, before_options=before, options=options,
+    )
     return discord.PCMVolumeTransformer(source, volume=volume)
