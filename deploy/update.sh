@@ -64,6 +64,11 @@ else
     "$VENV_DIR/bin/pip" install --quiet --upgrade -r requirements.txt
 fi
 
+# Reinstall the units every time. A pull can change how the bot is *run* — its
+# sandboxing, resource caps, the updater schedule — and restarting alone would
+# silently keep the old configuration while the repo says otherwise.
+bash "$APP_DIR/deploy/install-units.sh"
+
 echo "==> Restarting $SERVICE_NAME..."
 sudo systemctl restart "$SERVICE_NAME"
 
