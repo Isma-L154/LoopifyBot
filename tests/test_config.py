@@ -135,3 +135,30 @@ def test_log_runtime_leaks_no_secrets(caplog, monkeypatch):
     with caplog.at_level("INFO", logger="loopify"):
         config.log_runtime()
     assert "super-secret-token-value" not in caplog.text
+
+
+# -- .env ownership ----------------------------------------------------
+
+def test_dotenv_is_anchored_to_the_project_root():
+    """
+    Searching upward from the working directory would pick up a different .env
+    depending on where the bot was started from.
+    """
+    import os
+    assert os.path.isfile(os.path.join(config.PROJECT_ROOT, "config.py"))
+
+
+def test_the_systemd_unit_does_not_also_parse_env():
+    """
+    Two parsers over one file disagree on quoting and fail silently. Only
+    python-dotenv reads .env; the unit must not declare EnvironmentFile.
+    """
+    import os
+    setup = os.path.join(config.PROJECT_ROOT, "deploy", "setup.sh")
+    with open(setup, encoding="utf-8") as handle:
+        body = handle.read()
+    active = [
+        line for line in body.splitlines()
+        if "EnvironmentFile" in line and not line.lstrip().startswith("#")
+    ]
+    assert active == []

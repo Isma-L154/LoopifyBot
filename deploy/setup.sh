@@ -75,7 +75,10 @@ Wants=network-online.target
 Type=simple
 User=$APP_USER
 WorkingDirectory=$APP_DIR
-EnvironmentFile=$APP_DIR/.env
+# No EnvironmentFile on purpose. The bot reads .env with python-dotenv, and
+# having systemd parse the same file too means two parsers with different rules
+# for quoting and inline comments — they disagree silently, and the result looks
+# like a bad credential rather than a parsing problem.
 # Keep caches inside the (writable) app dir since HOME is read-only below.
 Environment=XDG_CACHE_HOME=$APP_DIR/.cache
 Environment=DENO_DIR=$APP_DIR/.cache/deno
