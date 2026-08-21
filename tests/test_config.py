@@ -148,17 +148,40 @@ def test_dotenv_is_anchored_to_the_project_root():
     assert os.path.isfile(os.path.join(config.PROJECT_ROOT, "config.py"))
 
 
-def test_the_systemd_unit_does_not_also_parse_env():
+def _deploy_scripts() -> list:
+    import glob
+    import os
+    found = glob.glob(os.path.join(config.PROJECT_ROOT, "deploy", "*.sh"))
+    assert found, "no deploy scripts found — this guard would pass vacuously"
+    return found
+
+
+def test_no_systemd_unit_also_parses_env():
     """
     Two parsers over one file disagree on quoting and fail silently. Only
-    python-dotenv reads .env; the unit must not declare EnvironmentFile.
+    python-dotenv reads .env; no unit may declare EnvironmentFile.
+
+    Scans every deploy script rather than one by name, so moving the unit
+    definition between files cannot quietly turn this guard off.
     """
-    import os
-    setup = os.path.join(config.PROJECT_ROOT, "deploy", "setup.sh")
-    with open(setup, encoding="utf-8") as handle:
-        body = handle.read()
-    active = [
-        line for line in body.splitlines()
-        if "EnvironmentFile" in line and not line.lstrip().startswith("#")
-    ]
-    assert active == []
+    offenders = []
+    for path in _deploy_scripts():
+        with open(path, encoding="utf-8") as handle:
+            for number, line in enumerate(handle, 1):
+                if "EnvironmentFile" in line and not line.lstrip().startswith("#"):
+                    offenders.append(f"{path}:{number}")
+    assert offenders == []
+
+
+def test_the_bot_unit_is_defined_exactly_once():
+    """
+    setup.sh and update.sh both install units. If either grew its own copy of
+    the definition they would drift, and the deployed config would depend on
+    which script ran last.
+    """
+    definers = []
+    for path in _deploy_scripts():
+        with open(path, encoding="utf-8") as handle:
+            if "Description=LoopifyBot Discord Music Bot" in handle.read():
+                definers.append(path)
+    assert len(definers) == 1, f"the service unit is defined in {len(definers)} places: {definers}"
