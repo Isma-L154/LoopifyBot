@@ -6,6 +6,7 @@ from discord.ext import commands
 
 import config
 from config import DISCORD_TOKEN, COMMAND_PREFIX, COGS
+from utils import errors
 
 config.configure_logging()
 config.validate()
@@ -40,13 +41,8 @@ async def on_ready():
 
 @bot.event
 async def on_command_error(ctx, error):
-    # Unwrap the original exception where discord.py wrapped it.
-    error = getattr(error, "original", error)
-    if isinstance(error, (commands.CommandNotFound, commands.CheckFailure)):
-        return                # unknown command / checks send their own errors
-    if isinstance(error, commands.MissingRequiredArgument):
-        return                # per-command handlers deal with these
-    log.warning("Error in command %s: %s", ctx.command, error)
+    # All of it lives in utils.errors so it can be tested without a gateway.
+    await errors.handle(ctx, error)
 
 
 # ── Custom help command ───────────────────────────────────────────────
