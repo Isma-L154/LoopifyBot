@@ -31,6 +31,8 @@ log = logging.getLogger("loopify.player")
 INACTIVITY_TIMEOUT = 300   # seconds with an empty queue before disconnecting
 HISTORY_LIMIT = 50
 MAX_QUEUE = 500            # hard cap to protect memory on small instances
+SEEK_TAIL_MARGIN = 2.0     # never resume into the last seconds of a track
+LOAD_FAILURE_SECONDS = 2.0 # a track ending faster than this never really started
 
 
 class MusicPlayer:
@@ -53,6 +55,9 @@ class MusicPlayer:
         self.effect_filter: str = ""
 
         self._start_ts: float = 0.0      # monotonic clock when current started
+        self._paused_at: Optional[float] = None   # when the current pause began
+        self._paused_total: float = 0.0           # paused seconds, this track
+        self._resume_at: float = 0.0              # seek offset for the next spawn
         self._stream: Optional[media.AudioStream] = None   # active yt-dlp stream
 
         # Signalling between commands and the playback loop.
@@ -129,16 +134,67 @@ class MusicPlayer:
             return True
         return False
 
+    @property
+    def elapsed(self) -> float:
+        """Seconds of the current track actually heard, excluding paused time."""
+        if not self._start_ts:
+            return 0.0
+        paused = self._paused_total
+        if self._paused_at is not None:
+            paused += time.monotonic() - self._paused_at
+        return max(0.0, time.monotonic() - self._start_ts - paused)
+
+    def pause(self) -> bool:
+        """Pause playback and stop the clock, so ``elapsed`` stays honest."""
+        vc = self.voice
+        if not (vc and vc.is_playing()):
+            return False
+        vc.pause()
+        if self._paused_at is None:
+            self._paused_at = time.monotonic()
+        return True
+
+    def resume(self) -> bool:
+        vc = self.voice
+        if not (vc and vc.is_paused()):
+            return False
+        vc.resume()
+        if self._paused_at is not None:
+            self._paused_total += time.monotonic() - self._paused_at
+            self._paused_at = None
+        return True
+
     def apply_effect(self, name: Optional[str], filter_str: str) -> bool:
-        """Restart the current track with a new FFmpeg filter (from the start)."""
+        """
+        Switch the current track to a new FFmpeg filter, resuming in place.
+
+        A filter chain is fixed for the life of an FFmpeg process, so changing
+        one means respawning the stream. ``_resume_at`` carries the current
+        position across that respawn — without it, asking for a bass boost four
+        minutes into a song threw the listener back to 0:00.
+        """
         vc = self.voice
         if not (vc and self.current and (vc.is_playing() or vc.is_paused())):
             return False
         self.effect_name = name
         self.effect_filter = filter_str
+        self._resume_at = self._seek_target()
         self._replay = True
         vc.stop()
         return True
+
+    def _seek_target(self) -> float:
+        """
+        Where a respawn should pick up, or 0 when seeking would be wrong.
+
+        Live streams report no duration and cannot be seeked, and a position in
+        the last couple of seconds would resume into silence or past the end.
+        """
+        duration = (self.current or {}).get("duration")
+        if not duration:
+            return 0.0
+        position = self.elapsed
+        return position if 0 < position < duration - SEEK_TAIL_MARGIN else 0.0
 
     def go_previous(self) -> bool:
         """Queue the previous track to play next, keeping the current one after it."""
@@ -185,11 +241,19 @@ class MusicPlayer:
                 self._stream = stream
                 was_replay = self._replay
                 self._replay = False
+                seek_to = self._resume_at
+                self._resume_at = 0.0
                 source = media.make_pipe_source(
-                    stream.stdout, volume=self.volume, ffmpeg_filter=self.effect_filter,
+                    stream.stdout, volume=self.volume,
+                    ffmpeg_filter=self.effect_filter, seek_seconds=seek_to,
                 )
                 vc.play(source, after=self._after_play)
-                self._start_ts = time.monotonic()
+                # Backdate the clock by the seek so a *second* effect change
+                # resumes from the real position, not from the respawn point.
+                self._start_ts = time.monotonic() - seek_to
+                self._paused_total = 0.0
+                self._paused_at = None
+                spawned_at = time.monotonic()
 
                 if not silent:
                     await self._safe_send(now_playing_embed(
@@ -198,7 +262,9 @@ class MusicPlayer:
                     ))
 
                 await self._next.wait()
-                played = time.monotonic() - self._start_ts
+                # Measured from the spawn, not from _start_ts, which is
+                # backdated when resuming partway into a track.
+                played = time.monotonic() - spawned_at
                 source.cleanup()               # stop FFmpeg
                 # close() waits on the child and reads its stderr, so keep it
                 # off the event loop.
@@ -208,7 +274,7 @@ class MusicPlayer:
                 # A near-instant end that wasn't a user action means the source
                 # failed to load (bot-check, unavailable). Tell the user.
                 if (not self._destroyed and not self._skip and not was_replay
-                        and played < 2.0):
+                        and played < LOAD_FAILURE_SECONDS):
                     track["error"] = stream.classify_error()   # cached by close()
                     await self._safe_send(self._load_error_embed(track))
                     self.current = None

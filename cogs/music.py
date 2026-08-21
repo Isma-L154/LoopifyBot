@@ -124,9 +124,10 @@ class Music(commands.Cog):
     @same_voice_channel()
     async def pause(self, ctx):
         """Pause the current track."""
-        vc = ctx.voice_client
-        if vc and vc.is_playing():
-            vc.pause()
+        # Routed through the player so it can stop its playback clock; that
+        # clock is what lets an effect change resume in the right place.
+        player = players.get(ctx.guild.id)
+        if player and player.pause():
             await ctx.send(embed=success_embed("Paused ⏸"))
         else:
             await ctx.send(embed=error_embed("Nothing is playing right now."))
@@ -135,9 +136,8 @@ class Music(commands.Cog):
     @same_voice_channel()
     async def resume(self, ctx):
         """Resume a paused track."""
-        vc = ctx.voice_client
-        if vc and vc.is_paused():
-            vc.resume()
+        player = players.get(ctx.guild.id)
+        if player and player.resume():
             await ctx.send(embed=success_embed("Resumed ▶️"))
         else:
             await ctx.send(embed=error_embed("Nothing is paused."))
