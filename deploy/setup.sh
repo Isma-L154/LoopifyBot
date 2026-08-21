@@ -106,11 +106,48 @@ TasksMax=256
 WantedBy=multi-user.target
 UNIT
 
+# ── 5. yt-dlp auto-update timer ───────────────────────────────────────
+# yt-dlp is the one dependency that must NOT be pinned: YouTube changes its
+# player constantly and a stale build stops resolving videos within weeks.
+echo "==> Installing yt-dlp auto-update timer..."
+chmod +x "$APP_DIR/deploy/update-ytdlp.sh"
+
+sudo tee "/etc/systemd/system/${SERVICE_NAME%-bot}-ytdlp-update.service" >/dev/null <<UNIT
+[Unit]
+Description=Refresh yt-dlp for LoopifyBot
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+# Runs as root to restart the service; drops to $APP_USER for the pip install.
+ExecStart=$APP_DIR/deploy/update-ytdlp.sh
+UNIT
+
+sudo tee "/etc/systemd/system/${SERVICE_NAME%-bot}-ytdlp-update.timer" >/dev/null <<UNIT
+[Unit]
+Description=Daily yt-dlp refresh for LoopifyBot
+
+[Timer]
+OnCalendar=daily
+# Spread the load rather than hitting PyPI at midnight with everyone else.
+RandomizedDelaySec=2h
+# Catch up after downtime — important on a machine that isn't on 24/7.
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+UNIT
+
 sudo systemctl daemon-reload
 sudo systemctl enable "$SERVICE_NAME"
+sudo systemctl enable --now "${SERVICE_NAME%-bot}-ytdlp-update.timer"
 
 echo ""
 echo "==> Done. Manage the bot with:"
 echo "    sudo systemctl start   $SERVICE_NAME"
 echo "    sudo systemctl status  $SERVICE_NAME"
 echo "    sudo journalctl -u $SERVICE_NAME -f   # live logs"
+echo ""
+echo "    bash deploy/update.sh                 # pull latest code & restart"
+echo "    systemctl list-timers '*ytdlp*'       # when yt-dlp refreshes next"
