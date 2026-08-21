@@ -53,7 +53,7 @@ class MusicPlayer:
         self.effect_filter: str = ""
 
         self._start_ts: float = 0.0      # monotonic clock when current started
-        self._proc = None                # active yt-dlp streaming subprocess
+        self._stream: Optional[media.AudioStream] = None   # active yt-dlp stream
 
         # Signalling between commands and the playback loop.
         self._next = asyncio.Event()     # set when the current source finishes
@@ -180,12 +180,13 @@ class MusicPlayer:
                     return self.destroy()
 
                 # Stream the audio through yt-dlp → FFmpeg (see services.media).
-                proc = await self.bot.loop.run_in_executor(None, media.spawn_stream, track)
-                self._proc = proc
+                stream = await self.bot.loop.run_in_executor(
+                    None, media.spawn_stream, track)
+                self._stream = stream
                 was_replay = self._replay
                 self._replay = False
                 source = media.make_pipe_source(
-                    proc.stdout, volume=self.volume, ffmpeg_filter=self.effect_filter,
+                    stream.stdout, volume=self.volume, ffmpeg_filter=self.effect_filter,
                 )
                 vc.play(source, after=self._after_play)
                 self._start_ts = time.monotonic()
@@ -199,15 +200,16 @@ class MusicPlayer:
                 await self._next.wait()
                 played = time.monotonic() - self._start_ts
                 source.cleanup()               # stop FFmpeg
-                media.kill_stream(proc)         # stop yt-dlp
-                self._proc = None
+                # close() waits on the child and reads its stderr, so keep it
+                # off the event loop.
+                await self.bot.loop.run_in_executor(None, stream.close)
+                self._stream = None
 
                 # A near-instant end that wasn't a user action means the source
                 # failed to load (bot-check, unavailable). Tell the user.
                 if (not self._destroyed and not self._skip and not was_replay
                         and played < 2.0):
-                    track["error"] = await self.bot.loop.run_in_executor(
-                        None, media.classify_stream_error, proc)
+                    track["error"] = stream.classify_error()   # cached by close()
                     await self._safe_send(self._load_error_embed(track))
                     self.current = None
         except asyncio.CancelledError:
@@ -290,8 +292,11 @@ class MusicPlayer:
         self._destroyed = True
         self.queue.clear()
         self.current = None
-        media.kill_stream(self._proc)
-        self._proc = None
+        if self._stream is not None:
+            # Reaping blocks briefly; hand it to a thread so teardown from a
+            # command never stalls the event loop.
+            self.bot.loop.run_in_executor(None, self._stream.close)
+            self._stream = None
         vc = self.voice
         if vc and vc.is_connected():
             asyncio.ensure_future(vc.disconnect(force=True))
