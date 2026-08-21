@@ -96,6 +96,18 @@ python main.py
 
 `!lyrics` is optional — set `GENIUS_TOKEN` in `.env` to enable it.
 
+### Running the tests
+```bash
+.venv/bin/pip install -r requirements-dev.txt   # Windows: .venv\Scripts\pip
+pytest
+```
+
+The suite needs **no credentials, no network and no `.env`** — it mocks the
+Discord gateway and never calls yt-dlp. It covers queue and player state, the
+`_advance` state machine (loop modes, skip, replay, autoplay, idle timeout),
+the `services.media` helpers, the voice-state guards, and the command edge
+cases. CI runs it on every push and pull request against Python 3.11 and 3.12.
+
 ### Deploy to AWS (t4g.micro, ~$6/mo or free tier)
 See **[deploy/README.md](deploy/README.md)** for a full walkthrough: launch script,
 provisioning (`deploy/setup.sh`) and a `systemd` service that auto-restarts and
