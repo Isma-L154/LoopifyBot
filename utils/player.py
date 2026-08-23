@@ -340,6 +340,10 @@ class MusicPlayer:
                     stream.stdout, volume=self.volume,
                     ffmpeg_filter=self.effect_filter, seek_seconds=seek_to,
                 )
+                # discord.py starts its playback clock before its first read,
+                # so it must not begin against an empty buffer — it would be
+                # seconds behind immediately and burst frames to catch up.
+                await self.bot.loop.run_in_executor(None, media.prime_source, source)
                 vc.play(source, after=self._after_play)
                 # Backdate the clock by the seek so a *second* effect change
                 # resumes from the real position, not from the respawn point.
