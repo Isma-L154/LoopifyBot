@@ -75,3 +75,15 @@ def player(fake_bot, fake_guild):
     yield p
     # Keep the module-level singleton clean between tests.
     players.discard(fake_guild.id)
+
+
+@pytest.fixture
+def clock_at_180(player, monkeypatch):
+    """A player 180 seconds into whatever it is playing."""
+    import time as _time
+    from utils import player as player_module
+
+    base = 1000.0
+    player._start_ts = base
+    monkeypatch.setattr(player_module.time, "monotonic", lambda: base + 180)
+    return player
