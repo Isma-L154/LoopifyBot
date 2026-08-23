@@ -113,3 +113,57 @@ def test_first_entry_passes_through_a_single_result():
 # Process teardown and failure classification moved to AudioStream when the
 # stderr-deadlock fix landed; they are covered against real subprocesses in
 # tests/test_audio_stream.py.
+
+
+# -- YouTube player clients --------------------------------------------
+
+def test_the_two_client_usages_cannot_drift():
+    """
+    The chain is used twice: as a list for metadata extraction and as a
+    comma-joined string for the streaming subprocess. When those were separate
+    literals they drifted, and search and playback disagreed about which client
+    to use.
+    """
+    from_options = media.YTDL_OPTIONS["extractor_args"]["youtube"]["player_client"]
+    assert list(media._PLAYER_CLIENTS) == list(from_options)
+
+
+def test_spawn_stream_passes_the_same_chain(monkeypatch):
+    captured = {}
+    monkeypatch.setattr(media.AudioStream, "launch", classmethod(
+        lambda cls, cmd: captured.setdefault("cmd", cmd)
+    ))
+    media.spawn_stream({"url": "https://example.invalid/x", "title": "T"})
+    cmd = captured["cmd"]
+    arg = cmd[cmd.index("--extractor-args") + 1]
+    assert arg == f"youtube:player_client={','.join(media._PLAYER_CLIENTS)}"
+
+
+def test_a_working_client_comes_first():
+    """
+    Order is latency: yt-dlp tries each client in turn, so a blocked client at
+    the front costs a full round trip before anything can play. web_embedded
+    measured 3.2s against mweb's 9.3s, both succeeding 6/6.
+    """
+    assert media._PLAYER_CLIENTS[0] == "web_embedded"
+
+
+@pytest.mark.parametrize("blocked", [
+    "default", "web", "android_vr", "tv", "ios", "android_music",
+])
+def test_clients_known_to_be_bot_checked_are_not_in_the_chain(blocked):
+    """
+    Every one of these was measured returning "sign in to confirm you're not a
+    bot". The previous chain consisted entirely of such clients, which is why
+    5 of 6 tracks failed to load.
+    """
+    assert blocked not in media._PLAYER_CLIENTS
+
+
+def test_a_client_needing_no_js_runtime_remains_as_a_last_resort():
+    """
+    web_embedded and mweb need a JS runtime (Deno) to solve the signature
+    challenge. tv_embedded does not, so it is the only thing that can work on a
+    host where Deno failed to install.
+    """
+    assert "tv_embedded" in media._PLAYER_CLIENTS
