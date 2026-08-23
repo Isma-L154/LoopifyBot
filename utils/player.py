@@ -32,6 +32,11 @@ INACTIVITY_TIMEOUT = 300   # seconds with an empty queue before disconnecting
 HISTORY_LIMIT = 50
 MAX_QUEUE = 500            # hard cap to protect memory on small instances
 SEEK_TAIL_MARGIN = 2.0     # never resume into the last seconds of a track
+# How long before a track ends to start fetching the next one. A prefetched
+# yt-dlp sits blocked on a full pipe until we consume it, and YouTube drops
+# connections that idle too long — so this is a compromise between hiding the
+# 3–8s startup and not holding a connection open for a whole track.
+PREFETCH_LEAD_SECONDS = 30.0
 LOAD_FAILURE_SECONDS = 2.0 # a track ending faster than this never really started
 
 
@@ -59,6 +64,9 @@ class MusicPlayer:
         self._paused_total: float = 0.0           # paused seconds, this track
         self._resume_at: float = 0.0              # seek offset for the next spawn
         self._stream: Optional[media.AudioStream] = None   # active yt-dlp stream
+        # Next track's stream, fetched while the current one plays.
+        self._prefetch: Optional[tuple[dict, media.AudioStream]] = None
+        self._prefetch_task: Optional[asyncio.Task] = None
 
         # Signalling between commands and the playback loop.
         self._next = asyncio.Event()     # set when the current source finishes
@@ -183,6 +191,87 @@ class MusicPlayer:
         vc.stop()
         return True
 
+    # ── Prefetch ──────────────────────────────────────────────────────
+
+    def _prefetch_delay(self, track: dict) -> Optional[float]:
+        """
+        Seconds to wait before prefetching, or ``None`` to start immediately.
+
+        Starting at the top of a long track would leave a yt-dlp process
+        blocked on a full pipe for minutes, and YouTube drops connections that
+        idle that long — the stream would then be dead by the time we wanted
+        it. Live streams have no end to count back from, so they prefetch now.
+        """
+        duration = (track or {}).get("duration")
+        if not duration:
+            return None
+        remaining = duration - self.elapsed - PREFETCH_LEAD_SECONDS
+        return remaining if remaining > 0 else None
+
+    def _start_prefetch(self) -> None:
+        """Begin fetching whatever is at the front of the queue."""
+        if self._destroyed or self._prefetch is not None:
+            return
+        if self._prefetch_task is not None and not self._prefetch_task.done():
+            return
+        if self.loop_mode == "track":
+            return                  # the next track is the current one
+        if not self.queue:
+            return
+        upcoming = self.queue[0]
+        self._prefetch_task = self.bot.loop.create_task(self._prefetch_next(upcoming))
+
+    async def _prefetch_next(self, upcoming: dict) -> None:
+        try:
+            stream = await self.bot.loop.run_in_executor(
+                None, media.spawn_stream, upcoming)
+        except Exception:
+            log.exception("Prefetch failed for guild %s", self.guild.id)
+            return
+        # The queue can change while this runs. Hand the stream over only if it
+        # is still wanted; otherwise close it rather than leaking the process.
+        if self._destroyed or self._prefetch is not None:
+            return self._discard(stream)
+        self._prefetch = (upcoming, stream)
+
+    def _take_prefetch(self, track: dict) -> Optional[media.AudioStream]:
+        """
+        The prefetched stream for ``track``, or ``None``.
+
+        Matching is by identity, not URL: skip, remove, shuffle and previous can
+        all change what plays next, and a stream fetched for a track that is no
+        longer next must be closed, not reused and not leaked.
+        """
+        if self._prefetch_task is not None and not self._prefetch_task.done():
+            self._prefetch_task.cancel()
+        self._prefetch_task = None
+
+        pending, self._prefetch = self._prefetch, None
+        if pending is None:
+            return None
+        upcoming, stream = pending
+        if upcoming is track:
+            return stream
+        self._discard(stream)
+        return None
+
+    def _discard(self, stream: media.AudioStream) -> None:
+        """Close a stream we are not going to play, off the event loop."""
+        self.bot.loop.run_in_executor(None, stream.close)
+
+    async def _wait_for_end(self, track: dict) -> None:
+        """Wait for the current track to finish, prefetching before it does."""
+        delay = self._prefetch_delay(track)
+        if delay is None:
+            self._start_prefetch()
+        else:
+            try:
+                await asyncio.wait_for(self._next.wait(), timeout=delay)
+                return                      # ended early — skip, stop, effect
+            except asyncio.TimeoutError:
+                self._start_prefetch()
+        await self._next.wait()
+
     def _seek_target(self) -> float:
         """
         Where a respawn should pick up, or 0 when seeking would be wrong.
@@ -236,8 +325,12 @@ class MusicPlayer:
                     return self.destroy()
 
                 # Stream the audio through yt-dlp → FFmpeg (see services.media).
-                stream = await self.bot.loop.run_in_executor(
-                    None, media.spawn_stream, track)
+                # A stream fetched while the previous track played starts
+                # instantly; otherwise pay the 3–8s yt-dlp startup now.
+                stream = self._take_prefetch(track)
+                if stream is None:
+                    stream = await self.bot.loop.run_in_executor(
+                        None, media.spawn_stream, track)
                 self._stream = stream
                 was_replay = self._replay
                 self._replay = False
@@ -261,7 +354,7 @@ class MusicPlayer:
                         loop_mode=self.loop_mode,
                     ))
 
-                await self._next.wait()
+                await self._wait_for_end(track)
                 # Measured from the spawn, not from _start_ts, which is
                 # backdated when resuming partway into a track.
                 played = time.monotonic() - spawned_at
@@ -363,6 +456,14 @@ class MusicPlayer:
             # command never stalls the event loop.
             self.bot.loop.run_in_executor(None, self._stream.close)
             self._stream = None
+        # A prefetched stream is a live yt-dlp process too — leaking it here
+        # would put back exactly the zombies that #6 removed.
+        if self._prefetch_task is not None and not self._prefetch_task.done():
+            self._prefetch_task.cancel()
+        self._prefetch_task = None
+        if self._prefetch is not None:
+            self._discard(self._prefetch[1])
+            self._prefetch = None
         vc = self.voice
         if vc and vc.is_connected():
             asyncio.ensure_future(vc.disconnect(force=True))
