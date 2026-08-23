@@ -252,3 +252,66 @@ def test_volume_can_still_be_changed_mid_playback(tmp_path):
             assert source.volume == pytest.approx(0.9)
         finally:
             source.cleanup()
+
+
+# -- an empty buffer is not the end ------------------------------------
+
+def test_a_slow_first_byte_is_not_mistaken_for_the_end():
+    """
+    The regression this guards: read() used to give up after a second and
+    return b"", which discord.py reads as "the track finished" and stops
+    playback. yt-dlp routinely takes 3-8s to produce its first byte, so every
+    track would have ended instantly.
+    """
+    inner = FakeSource(frames=10, stall_at=0, stall_for=2.0)
+    source = BufferedAudioSource(inner, seconds=1.0)
+    try:
+        started = time.monotonic()
+        first = source.read()
+        waited = time.monotonic() - started
+        assert first, f"gave up after {waited:.1f}s instead of waiting for audio"
+        assert waited > 1.0, "the test did not actually exercise a slow start"
+    finally:
+        source.cleanup()
+
+
+def test_prime_waits_for_audio_then_reports_ready():
+    """
+    discord.py starts its clock before its first read, so playback must not
+    begin against an empty buffer or the player is instantly behind schedule.
+    """
+    inner = FakeSource(frames=50, stall_at=0, stall_for=1.0)
+    source = BufferedAudioSource(inner, seconds=2.0)
+    try:
+        assert source.prime(timeout=10) is True
+        assert source.buffered_frames > 0
+    finally:
+        source.cleanup()
+
+
+def test_prime_gives_up_on_a_source_that_never_produces():
+    class Silent(discord.AudioSource):
+        def read(self):
+            time.sleep(30)
+            return b""
+
+        def cleanup(self):
+            pass
+
+    source = BufferedAudioSource(Silent(), seconds=1.0)
+    try:
+        started = time.monotonic()
+        assert source.prime(timeout=1.0) is False
+        assert time.monotonic() - started < 3.0, "prime overran its timeout"
+    finally:
+        source.cleanup()
+
+
+def test_prime_returns_promptly_when_the_source_is_already_finished():
+    source = BufferedAudioSource(FakeSource(frames=0), seconds=1.0)
+    try:
+        started = time.monotonic()
+        source.prime(timeout=5)
+        assert time.monotonic() - started < 2.0
+    finally:
+        source.cleanup()

@@ -20,6 +20,7 @@ Track dict shape::
 
 import os
 import sys
+import time
 import queue
 import threading
 import subprocess
@@ -350,6 +351,9 @@ FRAME_SECONDS = 0.02
 # and long enough to cover the gaps yt-dlp leaves when YouTube throttles a
 # download after its initial burst.
 READ_AHEAD_SECONDS = 5.0
+# Longest to wait for the first audio before starting playback. yt-dlp needs
+# seconds to resolve and connect; beyond this something is genuinely wrong.
+PRIME_TIMEOUT_SECONDS = 30.0
 
 
 class BufferedAudioSource(discord.AudioSource):
@@ -415,13 +419,41 @@ class BufferedAudioSource(discord.AudioSource):
                 pass
 
     def read(self) -> bytes:
-        if self._stop.is_set():
-            return b""
-        try:
-            return self._queue.get(timeout=1.0)
-        except queue.Empty:
-            # The producer is wedged; ending is better than stalling playback.
-            return b""
+        """
+        The next frame, or ``b""`` when the source is finished.
+
+        An empty buffer is NOT the end. yt-dlp needs seconds to produce its
+        first byte, so returning ``b""`` while the producer is still working
+        would tell discord.py the track had ended and stop it immediately. Only
+        the sentinel the producer puts in on exit, or a producer that has died,
+        means finished.
+        """
+        while not self._stop.is_set():
+            try:
+                return self._queue.get(timeout=0.5)
+            except queue.Empty:
+                if not self._thread.is_alive():
+                    return b""      # producer gone without leaving a sentinel
+                continue
+        return b""
+
+    def prime(self, *, timeout: float = PRIME_TIMEOUT_SECONDS) -> bool:
+        """
+        Block until there is audio ready, or the source ends. Never on the loop.
+
+        discord.py's player starts its clock *before* its first read, so
+        beginning playback against an empty buffer leaves it seconds behind
+        schedule — and it catches up by bursting frames, which is the exact
+        artefact this class exists to prevent. Filling first means the clock
+        starts when audio is genuinely ready.
+        """
+        deadline = time.monotonic() + timeout
+        while time.monotonic() < deadline:
+            if self._stop.is_set() or self.buffered_frames or not self._thread.is_alive():
+                return self.buffered_frames > 0
+            time.sleep(0.05)
+        log.warning("Timed out waiting %.0fs for audio to buffer", timeout)
+        return False
 
     def cleanup(self) -> None:
         """Stop the reader thread and tear down the wrapped source."""
@@ -463,3 +495,15 @@ def make_pipe_source(stdin, *, volume: float = 0.5, ffmpeg_filter: str = "",
     return discord.PCMVolumeTransformer(
         BufferedAudioSource(source), volume=volume,
     )
+
+
+def prime_source(source) -> bool:
+    """
+    Wait for a source from :func:`make_pipe_source` to have audio ready.
+
+    Blocks, so call it from an executor. Returns whether anything buffered —
+    ``False`` means the track produced no audio and the caller should treat it
+    as a failed load rather than start playing silence.
+    """
+    inner = getattr(source, "original", None)
+    return inner.prime() if isinstance(inner, BufferedAudioSource) else True
