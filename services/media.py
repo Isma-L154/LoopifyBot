@@ -30,20 +30,29 @@ import yt_dlp
 
 log = logging.getLogger("loopify.media")
 
-# The player_client fallback chain, as a CLI value for the streaming subprocess.
-_PLAYER_CLIENTS = "default,android_vr,tv_embedded"
+# YouTube player clients, tried in order. ONE definition — both the metadata
+# options below and the streaming subprocess derive from this, because two
+# separate lists silently drift and then playback and search disagree about
+# which client to use.
+#
+# Ordered by measured behaviour, not by theory. Every client yt-dlp offers was
+# tested against the same video from a residential IP:
+#
+#   web_embedded  works, ~3.2s    <- fastest that works
+#   mweb          works, ~9.3s    <- reliable but slow, kept as a fallback
+#   tv_embedded   bot-checked     <- kept last: needs no JS runtime, so it is
+#                                    the only option on a host without Deno
+#   default / web / android_vr / tv / ios / android_music  all bot-checked
+#
+# The previous chain was "default,android_vr,tv_embedded" — every entry of which
+# is now bot-checked, so yt-dlp exhausted it and 5 of 6 tracks failed to load.
+#
+# A residential IP reduces YouTube's bot-checking but does NOT remove it. Valid
+# cookies (COOKIES_PATH) still help and remain supported; getting the client
+# chain right avoids needing them at all.
+_PLAYER_CLIENTS = ("web_embedded", "mweb", "tv_embedded")
 
 # Base yt-dlp config shared by every call.
-#
-# player_client fallback chain, tried in order:
-#   * "default" (web) gives clean audio-only formats and works best WITH cookies,
-#     but needs a JS runtime (Deno/Node) to solve YouTube's signature challenge —
-#     deploy installs Deno for exactly this (see deploy/setup.sh).
-#   * "android_vr"/"tv_embedded" need no JS runtime and are the fallback for
-#     environments without one (e.g. a dev box). yt-dlp automatically advances to
-#     the next client if one yields no usable formats.
-# From a datacenter IP, valid cookies (COOKIES_PATH) are what defeats YouTube's
-# "confirm you're not a bot" check — see deploy/README.md.
 YTDL_OPTIONS = {
     "format": "bestaudio/best",
     "noplaylist": True,
@@ -53,7 +62,7 @@ YTDL_OPTIONS = {
     "source_address": "0.0.0.0",   # bind to IPv4; avoids some 403s
     "skip_download": True,
     "extractor_args": {
-        "youtube": {"player_client": ["default", "android_vr", "tv_embedded"]},
+        "youtube": {"player_client": list(_PLAYER_CLIENTS)},
     },
 }
 
@@ -321,7 +330,7 @@ def spawn_stream(track: dict) -> AudioStream:
         "-f", "bestaudio/best",
         "-o", "-",                       # write audio to stdout
         "-q", "--no-warnings", "--no-playlist",
-        "--extractor-args", f"youtube:player_client={_PLAYER_CLIENTS}",
+        "--extractor-args", f"youtube:player_client={','.join(_PLAYER_CLIENTS)}",
         "--source-address", "0.0.0.0",
     ]
     cookies = YTDL_OPTIONS.get("cookiefile")
