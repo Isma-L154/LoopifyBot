@@ -20,12 +20,15 @@ Track dict shape::
 
 import os
 import sys
+import queue
+import threading
 import subprocess
 import tempfile
 import asyncio
 import logging
 from typing import Optional
 
+import discord
 import yt_dlp
 
 log = logging.getLogger("loopify.media")
@@ -340,6 +343,103 @@ def spawn_stream(track: dict) -> AudioStream:
     return AudioStream.launch(cmd)
 
 
+# Discord consumes 20 ms of 48 kHz stereo 16-bit PCM per frame.
+FRAME_SIZE = 3840
+FRAME_SECONDS = 0.02
+# How much audio to keep ready. 5 s is ~960 KB — nothing against 15 GB of RAM,
+# and long enough to cover the gaps yt-dlp leaves when YouTube throttles a
+# download after its initial burst.
+READ_AHEAD_SECONDS = 5.0
+
+
+class BufferedAudioSource(discord.AudioSource):
+    """
+    Keeps a few seconds of audio ready so a stalled source never delays a frame.
+
+    ``discord.py``'s player paces itself against a wall clock::
+
+        next_time = self._start + DELAY * self.loops
+        delay = max(0, DELAY + (next_time - time.perf_counter()))
+        time.sleep(delay)
+
+    If ``source.read()`` blocks — FFmpeg waiting on bytes from yt-dlp — the
+    player falls behind that schedule. ``delay`` then clamps to zero and it
+    sends frames as fast as it can until it catches up, which is audible as the
+    track briefly speeding up before settling. Reading ahead in a background
+    thread means a stall shorter than the buffer never reaches the player.
+
+    The queue is **bounded**: an unbounded one in front of a fast source would
+    pull a whole track into RAM and undo the backpressure that the yt-dlp pipe
+    exists to provide.
+    """
+
+    def __init__(self, source, *, seconds: float = READ_AHEAD_SECONDS) -> None:
+        self._source = source
+        self.capacity_frames = max(1, int(seconds / FRAME_SECONDS))
+        self._queue: "queue.Queue" = queue.Queue(maxsize=self.capacity_frames)
+        self._stop = threading.Event()
+        self._thread = threading.Thread(
+            target=self._fill, name="loopify-readahead", daemon=True,
+        )
+        self._thread.start()
+
+    @property
+    def buffered_frames(self) -> int:
+        return self._queue.qsize()
+
+    def is_opus(self) -> bool:
+        return self._source.is_opus()
+
+    def _fill(self) -> None:
+        """Pull from the wrapped source until it ends, fails, or we stop."""
+        try:
+            while not self._stop.is_set():
+                data = self._source.read()
+                if not data:
+                    break
+                # Block when full — that is the backpressure. Time out so the
+                # thread still notices _stop while the consumer is gone.
+                while not self._stop.is_set():
+                    try:
+                        self._queue.put(data, timeout=0.1)
+                        break
+                    except queue.Full:
+                        continue
+        except Exception as e:
+            log.warning("Read-ahead stopped: %s", e)
+        finally:
+            # A sentinel unblocks a consumer waiting on an exhausted source.
+            try:
+                self._queue.put_nowait(b"")
+            except queue.Full:
+                pass
+
+    def read(self) -> bytes:
+        if self._stop.is_set():
+            return b""
+        try:
+            return self._queue.get(timeout=1.0)
+        except queue.Empty:
+            # The producer is wedged; ending is better than stalling playback.
+            return b""
+
+    def cleanup(self) -> None:
+        """Stop the reader thread and tear down the wrapped source."""
+        if self._stop.is_set():
+            return
+        self._stop.set()
+        # Drain so a producer blocked on a full queue can see _stop and exit.
+        try:
+            while True:
+                self._queue.get_nowait()
+        except queue.Empty:
+            pass
+        try:
+            self._source.cleanup()
+        except Exception:
+            pass
+
+
 def make_pipe_source(stdin, *, volume: float = 0.5, ffmpeg_filter: str = "",
                      seek_seconds: float = 0.0):
     """
@@ -351,10 +451,15 @@ def make_pipe_source(stdin, *, volume: float = 0.5, ffmpeg_filter: str = "",
     read-and-discard rather than a real seek, but it costs almost nothing
     because yt-dlp delivers at network speed rather than in realtime.
     """
-    import discord
     options = f"-vn -af {ffmpeg_filter}" if ffmpeg_filter else "-vn"
     before = f"-ss {seek_seconds:.3f}" if seek_seconds > 0 else None
     source = discord.FFmpegPCMAudio(
         stdin, pipe=True, before_options=before, options=options,
     )
-    return discord.PCMVolumeTransformer(source, volume=volume)
+    # Order matters. The read-ahead goes around FFmpeg, which is what stalls,
+    # and the volume transformer stays outermost so `MusicPlayer.set_volume`
+    # still finds a PCMVolumeTransformer on `voice_client.source`. Volume is a
+    # cheap multiply, so applying it on the consumer side costs nothing.
+    return discord.PCMVolumeTransformer(
+        BufferedAudioSource(source), volume=volume,
+    )
