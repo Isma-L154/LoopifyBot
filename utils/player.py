@@ -63,11 +63,15 @@ class MusicPlayer:
         self.volume: float = 0.5
         self.effect_name: Optional[str] = None
         self.effect_filter: str = ""
+        # How fast the active effect consumes audio: nightcore 1.25, vaporwave
+        # 0.8, everything else 1.0. `position` needs it; `elapsed` does not.
+        self.effect_rate: float = 1.0
 
         self._start_ts: float = 0.0      # monotonic clock when current started
         self._paused_at: Optional[float] = None   # when the current pause began
         self._paused_total: float = 0.0           # paused seconds, this track
         self._resume_at: float = 0.0              # seek offset for the next spawn
+        self._seek_base: float = 0.0              # offset the live stream started at
         self._stream: Optional[media.AudioStream] = None   # active yt-dlp stream
         # Next track's stream, fetched while the current one plays.
         self._prefetch: Optional[tuple[dict, media.AudioStream]] = None
@@ -169,6 +173,20 @@ class MusicPlayer:
             paused += time.monotonic() - self._paused_at
         return max(0.0, time.monotonic() - self._start_ts - paused)
 
+    @property
+    def position(self) -> float:
+        """
+        Where the audio actually is, which is not always where the clock is.
+
+        The pitch effects change playback speed, so at 1.25x the song is a
+        quarter further along than wall time. Only the stretch since the current
+        stream was spawned is scaled — whatever came before it was heard at
+        whatever speed was in force then, and `_seek_base` is where it resumed.
+        """
+        if self.effect_rate == 1.0:
+            return self.elapsed
+        return self._seek_base + (self.elapsed - self._seek_base) * self.effect_rate
+
     def pause(self) -> bool:
         """Pause playback and stop the clock, so ``elapsed`` stays honest."""
         vc = self.voice
@@ -189,7 +207,8 @@ class MusicPlayer:
             self._paused_at = None
         return True
 
-    def apply_effect(self, name: Optional[str], filter_str: str) -> bool:
+    def apply_effect(self, name: Optional[str], filter_str: str,
+                     rate: float = 1.0) -> bool:
         """
         Switch the current track to a new FFmpeg filter, resuming in place.
 
@@ -203,6 +222,7 @@ class MusicPlayer:
             return False
         self.effect_name = name
         self.effect_filter = filter_str
+        self.effect_rate = rate
         self._resume_at = self._seek_target()
         self._replay = True
         vc.stop()
@@ -353,6 +373,7 @@ class MusicPlayer:
                 self._replay = False
                 seek_to = self._resume_at
                 self._resume_at = 0.0
+                self._seek_base = seek_to
                 source = media.make_pipe_source(
                     stream.stdout, volume=self.volume,
                     ffmpeg_filter=self.effect_filter, seek_seconds=seek_to,

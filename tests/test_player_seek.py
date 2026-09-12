@@ -243,3 +243,55 @@ def test_the_filter_and_the_seek_coexist(captured_ffmpeg):
 def test_no_filter_still_strips_video(captured_ffmpeg):
     media.make_pipe_source(MagicMock())
     assert captured_ffmpeg.last["options"] == "-vn"
+
+
+# -- position: where the audio really is -------------------------------
+#
+# `elapsed` is wall-clock. The two pitch effects change how fast the audio is
+# consumed, so at 1.25x the song is a quarter further along than the clock says.
+# Synced lyrics read `position`, and would drift visibly without this.
+
+def test_position_is_the_wall_clock_when_no_effect_is_on(playing):
+    assert playing.position == pytest.approx(playing.elapsed)
+
+
+def test_nightcore_puts_the_song_ahead_of_the_clock(playing):
+    playing.effect_rate = 1.25
+
+    assert playing.position == pytest.approx(180 * 1.25)
+
+
+def test_vaporwave_puts_the_song_behind_the_clock(playing):
+    playing.effect_rate = 0.8
+
+    assert playing.position == pytest.approx(180 * 0.8)
+
+
+def test_a_resumed_stream_counts_the_rate_only_from_the_resume_point(playing, clock):
+    """
+    An effect change respawns FFmpeg partway in. The seconds before that point
+    were already played at the old speed, so only what follows is scaled.
+    """
+    playing._seek_base = 180.0        # respawned at 3:00
+    playing._start_ts = clock.now - 180.0
+    clock.advance(40)                 # 40s of wall time since the respawn
+    playing.effect_rate = 1.25
+
+    assert playing.position == pytest.approx(180 + 40 * 1.25)
+
+
+def test_applying_an_effect_records_its_rate(playing):
+    playing.apply_effect("nightcore", "aresample=48000,asetrate=48000*1.25", rate=1.25)
+
+    assert playing.effect_rate == 1.25
+
+
+def test_clearing_the_effect_puts_the_rate_back(playing):
+    playing.apply_effect("nightcore", "filter", rate=1.25)
+    playing.apply_effect(None, "")
+
+    assert playing.effect_rate == 1.0
+
+
+def test_position_never_runs_backwards_before_playback(player):
+    assert player.position == 0.0

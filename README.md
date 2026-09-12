@@ -11,7 +11,7 @@ A fully-featured Discord music bot built with Python. Supports YouTube and Sound
 - 🔗 **Direct links** — Any of the 1000+ sites yt-dlp supports, plus raw audio URLs
 - 📋 **Queue system** — Full queue management with shuffle, loop, and history
 - 🎛️ **Audio effects** — Bass boost, nightcore, vaporwave, 8D audio, echo, and more
-- 🎤 **Lyrics** — Fetch lyrics for any song via Genius
+- 🎤 **Live lyrics** — One message that follows the song line by line, karaoke-style
 - 🔊 **Volume control** — Per-server volume adjustment
 - 🔁 **Loop modes** — Loop a single track or the entire queue
 - ▶️ **Autoplay** — Automatically queue related tracks when the queue ends
@@ -65,9 +65,9 @@ A fully-featured Discord music bot built with Python. Supports YouTube and Sound
 
 | Command | Description |
 |---|---|
-| `!lyrics` | Get lyrics for the current song |
-| `!lyrics <title>` | Search lyrics by song title |
-| `!lyrics <title> - <artist>` | Search lyrics by title and artist |
+| `!lyrics` | Follow the current song's lyrics live, in one self-updating message |
+| `!lyrics <title>` | Look up lyrics by song title |
+| `!lyrics <title> - <artist>` | Look up lyrics by title and artist |
 | `!help` | Show the full command list |
 
 ---
@@ -95,7 +95,9 @@ cp .env.example .env                            # then fill in DISCORD_TOKEN
 python main.py
 ```
 
-`!lyrics` is optional — set `GENIUS_TOKEN` in `.env` to enable it.
+Lyrics need no credentials: timings come from [LRCLIB](https://lrclib.net),
+which is free and needs no key. `GENIUS_TOKEN` in `.env` is optional and only
+adds a fallback for songs LRCLIB does not have.
 
 ### Running the tests
 ```bash

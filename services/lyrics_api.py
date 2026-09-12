@@ -41,7 +41,7 @@ def _client() -> lyricsgenius.Genius:
     )
 
 
-async def fetch(title: str, artist: str = "", *, loop=None) -> Optional[dict]:
+async def fetch(title: str, artist: str = "") -> Optional[dict]:
     """
     Search Genius for lyrics.
 
@@ -56,7 +56,9 @@ async def fetch(title: str, artist: str = "", *, loop=None) -> Optional[dict]:
         log.debug("No GENIUS_TOKEN configured; skipping lookup for %r", title)
         return None
 
-    loop = loop or asyncio.get_event_loop()
+    # The running loop, not a passed-in one: reaching for `bot.loop` before
+    # the gateway is up raises, and this never needs a different loop anyway.
+    loop = asyncio.get_running_loop()
 
     def _search():
         client = _client()
