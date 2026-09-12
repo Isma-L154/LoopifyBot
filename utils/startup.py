@@ -14,7 +14,9 @@ window. Two starts died on ``EAI_AGAIN`` before a third one landed.
 """
 
 import asyncio
+import contextlib
 import logging
+import signal
 
 import aiohttp
 import discord
@@ -97,3 +99,80 @@ async def start(bot, token: str, **retry_options) -> None:
     """
     await login_with_retry(bot, token, **retry_options)
     await bot.connect(reconnect=True)
+
+
+# How long to give one voice client to confirm it has left. discord.py's own
+# wait is the *connect* timeout (see cogs.music.VOICE_CONNECT_TIMEOUT), which is
+# far more than a shutdown can afford, so the teardown below bounds it.
+VOICE_DISCONNECT_TIMEOUT = 5.0
+
+_STOP_SIGNALS = ("SIGINT", "SIGTERM")
+
+
+async def leave_voice(bot, *, timeout: float = VOICE_DISCONNECT_TIMEOUT) -> None:
+    """
+    Leave every voice channel, giving each one a bounded chance to confirm.
+
+    ``Client.close()`` would do this too, but it waits the full connect timeout
+    per client with no bound of its own. On a supervised host that is how a
+    shutdown overruns ``TimeoutStopSec`` and gets SIGKILLed — which then skips
+    the child reaping that killing FFmpeg and yt-dlp depends on. Releasing voice
+    here first leaves ``close()`` nothing to be patient about.
+    """
+    for voice in list(getattr(bot, "voice_clients", ())):
+        try:
+            await asyncio.wait_for(voice.disconnect(force=True), timeout=timeout)
+        except asyncio.TimeoutError:
+            log.warning("Voice disconnect did not confirm in %.0fs; abandoning it",
+                        timeout)
+        except Exception:
+            log.warning("Voice disconnect failed", exc_info=True)
+
+
+def _watch_for_stop_signals(stop: asyncio.Event) -> None:
+    """Ask the loop to set ``stop`` on SIGINT/SIGTERM, where it can."""
+    loop = asyncio.get_running_loop()
+    for name in _STOP_SIGNALS:
+        signal_number = getattr(signal, name, None)
+        if signal_number is None:
+            continue
+        try:
+            loop.add_signal_handler(signal_number, stop.set)
+        except (NotImplementedError, RuntimeError):
+            # Windows has no add_signal_handler; there KeyboardInterrupt still
+            # unwinds through serve()'s finally, which is what matters.
+            pass
+
+
+async def serve(bot, token: str, *,
+                stop: asyncio.Event | None = None,
+                voice_timeout: float = VOICE_DISCONNECT_TIMEOUT,
+                **retry_options) -> None:
+    """
+    Run the bot until it is asked to stop, then release voice within a bound.
+
+    The stop signal is turned into an event rather than left as a
+    ``KeyboardInterrupt``, so the teardown runs as ordinary code instead of
+    during exception unwinding — where every further ``await`` in a cancelled
+    task would raise immediately and skip the cleanup.
+    """
+    if stop is None:
+        stop = asyncio.Event()
+        _watch_for_stop_signals(stop)
+
+    running = asyncio.create_task(start(bot, token, **retry_options))
+    stopping = asyncio.create_task(stop.wait())
+    try:
+        done, _ = await asyncio.wait({running, stopping},
+                                     return_when=asyncio.FIRST_COMPLETED)
+        if running in done:
+            running.result()        # a real failure must still reach systemd
+    finally:
+        stopping.cancel()
+        # Only await a task still in flight. Awaiting one that already failed
+        # would re-raise its error here and skip the voice teardown below.
+        if not running.done():
+            running.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await running
+        await leave_voice(bot, timeout=voice_timeout)

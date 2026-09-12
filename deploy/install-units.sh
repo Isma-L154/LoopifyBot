@@ -43,7 +43,13 @@ Restart=on-failure
 RestartSec=5
 # Give the bot a moment to shut down cleanly.
 KillSignal=SIGINT
-TimeoutStopSec=15
+# Must stay above cogs.music.VOICE_CONNECT_TIMEOUT. discord.py reuses the voice
+# *connect* timeout as the deadline for Discord to confirm a departure, and
+# Client.close() waits that out for every voice client. With 15s here and 20s
+# there, systemd SIGKILLed a shutdown that was going to finish — which skipped
+# the reaping of FFmpeg and yt-dlp. A clean stop still takes milliseconds; this
+# is only the ceiling. See issue #35, and tests/test_shutdown.py enforces it.
+TimeoutStopSec=30
 # ── Sandboxing / hardening ──
 NoNewPrivileges=true
 PrivateTmp=true
