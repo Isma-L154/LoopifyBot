@@ -6,7 +6,8 @@ from discord.ext import commands
 
 from services import media
 from utils.player import players, MusicPlayer, MAX_QUEUE
-from utils.embeds import queue_embed, now_playing_embed, error_embed, success_embed
+from utils.embeds import (added_embed, error_embed, now_playing_embed,
+                          queue_embed, success_embed)
 from utils.checks import user_in_voice, same_voice_channel
 
 log = logging.getLogger("loopify.music")
@@ -25,7 +26,7 @@ def _is_playlist_url(query: str) -> bool:
     return "/sets/" in q or "/album/" in q  # SoundCloud set / Bandcamp album
 
 
-class Music(commands.Cog):
+class Music(commands.Cog, name="🎵 Music & Queue"):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
 
@@ -55,7 +56,7 @@ class Music(commands.Cog):
             return False
 
     def _player(self, ctx) -> MusicPlayer:
-        return players.get_or_create(self.bot, ctx)
+        return players.get_or_create(self.bot, ctx.guild, ctx.channel)
 
     # ── Playback commands ─────────────────────────────────────────────
 
@@ -98,7 +99,7 @@ class Music(commands.Cog):
                     f"Queue is full (max {MAX_QUEUE} tracks)."
                 ))
             if not was_idle:
-                await ctx.send(embed=self._added_embed(tracks[0]))
+                await ctx.send(embed=added_embed(tracks[0]))
         else:
             added = player.add_many(tracks)
             if added == 0:
@@ -109,16 +110,6 @@ class Music(commands.Cog):
             await ctx.send(embed=success_embed(
                 f"Added **{added} tracks** from {batch_label} to the queue.{skipped}"
             ))
-        # When idle, the player loop picks up the newly-added track automatically.
-
-    @staticmethod
-    def _added_embed(track: dict) -> discord.Embed:
-        url = track.get("url") or track.get("spotify_url")
-        title = f"[{track['title']}]({url})" if url else track["title"]
-        embed = discord.Embed(description=f"➕ Added to queue: **{title}**", color=0x5865F2)
-        if track.get("thumbnail"):
-            embed.set_thumbnail(url=track["thumbnail"])
-        return embed
 
     @commands.command()
     @same_voice_channel()
@@ -280,7 +271,6 @@ class Music(commands.Cog):
         vc = member.guild.voice_client
         if not vc:
             return
-        # Only react to people leaving the bot's own channel.
         if before.channel != vc.channel:
             return
         if len([m for m in vc.channel.members if not m.bot]) == 0:

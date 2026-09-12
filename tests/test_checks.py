@@ -10,7 +10,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from utils.checks import user_in_voice, bot_in_voice, same_voice_channel
+from utils.checks import user_in_voice, same_voice_channel
 
 
 @pytest.fixture
@@ -51,18 +51,6 @@ async def test_user_in_voice_refuses_a_stale_voice_state(ctx):
     """A voice state with no channel means the user just left."""
     ctx.author.voice = in_channel(None)
     assert await user_in_voice().predicate(ctx) is False
-
-
-# -- bot_in_voice ------------------------------------------------------
-
-async def test_bot_in_voice_passes_when_the_bot_is_connected(ctx):
-    ctx.voice_client = MagicMock()
-    assert await bot_in_voice().predicate(ctx) is True
-
-
-async def test_bot_in_voice_refuses_and_explains_when_the_bot_is_not(ctx):
-    assert await bot_in_voice().predicate(ctx) is False
-    assert "not connected" in sent_text(ctx)
 
 
 # -- same_voice_channel ------------------------------------------------

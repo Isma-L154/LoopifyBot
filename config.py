@@ -20,18 +20,12 @@ from dotenv import load_dotenv
 PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
 load_dotenv(os.path.join(PROJECT_ROOT, ".env"))
 
-# ── Bot ───────────────────────────────────────────────────────────────
 DISCORD_TOKEN  = os.getenv("DISCORD_TOKEN")
 COMMAND_PREFIX = os.getenv("COMMAND_PREFIX", "!")
+GENIUS_TOKEN   = os.getenv("GENIUS_TOKEN")
+COOKIES_PATH   = os.getenv("COOKIES_PATH")
+LOG_LEVEL      = os.getenv("LOG_LEVEL", "INFO").upper()
 
-# ── Genius (Lyrics) ───────────────────────────────────────────────────
-GENIUS_TOKEN = os.getenv("GENIUS_TOKEN")
-
-# ── Misc ──────────────────────────────────────────────────────────────
-COOKIES_PATH = os.getenv("COOKIES_PATH")
-LOG_LEVEL    = os.getenv("LOG_LEVEL", "INFO").upper()
-
-# ── Cogs to load ──────────────────────────────────────────────────────
 COGS = [
     "cogs.music",
     "cogs.effects",

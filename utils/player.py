@@ -11,7 +11,7 @@ source was being played.
 
 Track dict shape (see ``services.media._build_track``)::
 
-    {title, url, stream, duration, thumbnail, uploader, source, query}
+    {title, url, duration, thumbnail, uploader, source, query}
 """
 
 import time
@@ -19,12 +19,12 @@ import random
 import asyncio
 import logging
 from collections import deque
-from typing import Optional
+from typing import Callable, Optional
 
 import discord
 
 from services import media
-from utils.embeds import now_playing_embed, error_embed, info_embed
+from utils.announcer import ChannelAnnouncer
 
 log = logging.getLogger("loopify.player")
 
@@ -44,10 +44,15 @@ class MusicPlayer:
     """Owns the queue, playback loop and voice state for a single guild."""
 
     def __init__(self, bot: discord.Client, guild: discord.Guild,
-                 text_channel: discord.abc.Messageable):
+                 text_channel: discord.abc.Messageable, *,
+                 on_destroy: Optional[Callable[[int], None]] = None):
         self.bot = bot
         self.guild = guild
-        self.text_channel = text_channel
+        self.announcer = ChannelAnnouncer(text_channel)
+        # Who to tell when this player is finished. Injected rather than reached
+        # for, so the player never has to know about the registry holding it —
+        # and a test can build one without touching process-wide state.
+        self._on_destroy = on_destroy
 
         self.queue: deque[dict] = deque()
         self.history: list[dict] = []
@@ -123,7 +128,7 @@ class MusicPlayer:
 
     @property
     def is_empty(self) -> bool:
-        return len(self.queue) == 0
+        return not self.queue
 
     def to_list(self) -> list[dict]:
         return list(self.queue)
@@ -131,6 +136,18 @@ class MusicPlayer:
     @property
     def voice(self) -> Optional[discord.VoiceClient]:
         return self.guild.voice_client
+
+    @property
+    def text_channel(self) -> discord.abc.Messageable:
+        return self.announcer.channel
+
+    @text_channel.setter
+    def text_channel(self, channel: discord.abc.Messageable) -> None:
+        self.announcer.channel = channel
+
+    @property
+    def is_destroyed(self) -> bool:
+        return self._destroyed
 
     # ── Command-facing controls ───────────────────────────────────────
 
@@ -353,16 +370,16 @@ class MusicPlayer:
                 spawned_at = time.monotonic()
 
                 if not silent:
-                    await self._safe_send(now_playing_embed(
+                    await self.announcer.now_playing(
                         track, track.get("requester") or self.guild.me,
-                        loop_mode=self.loop_mode,
-                    ))
+                        self.loop_mode,
+                    )
 
                 await self._wait_for_end(track)
                 # Measured from the spawn, not from _start_ts, which is
                 # backdated when resuming partway into a track.
                 played = time.monotonic() - spawned_at
-                source.cleanup()               # stop FFmpeg
+                source.cleanup()
                 # close() waits on the child and reads its stderr, so keep it
                 # off the event loop.
                 await self.bot.loop.run_in_executor(None, stream.close)
@@ -373,7 +390,7 @@ class MusicPlayer:
                 if (not self._destroyed and not self._skip and not was_replay
                         and played < LOAD_FAILURE_SECONDS):
                     track["error"] = stream.classify_error()   # cached by close()
-                    await self._safe_send(self._load_error_embed(track))
+                    await self.announcer.load_failed(track)
                     self.current = None
         except asyncio.CancelledError:
             raise
@@ -414,7 +431,6 @@ class MusicPlayer:
             self.current = self.queue.popleft()
             return self.current, False
 
-        # Queue empty → try autoplay.
         if self.autoplay and prev:
             nxt = await media.related(prev, loop=self.bot.loop)
             if nxt:
@@ -430,21 +446,8 @@ class MusicPlayer:
             return None, False
         return await self._advance()
 
-    @staticmethod
-    def _load_error_embed(track: dict) -> discord.Embed:
-        title = track.get("title", "track")
-        if track.get("error") == "blocked":
-            return error_embed(
-                f"YouTube is rate-limiting this server, so **{title}** can't be "
-                f"loaded right now. Try SoundCloud instead — e.g. `!play sc: {title}`."
-            )
-        return error_embed(f"Couldn't load **{title}** — skipping.")
-
     async def _idle_disconnect(self) -> None:
-        await self._safe_send(info_embed(
-            "👋 Left the channel",
-            "Disconnected after 5 minutes of inactivity.",
-        ))
+        await self.announcer.idle_disconnect(INACTIVITY_TIMEOUT)
         self.destroy()
 
     # ── Teardown ──────────────────────────────────────────────────────
@@ -473,13 +476,8 @@ class MusicPlayer:
             asyncio.ensure_future(vc.disconnect(force=True))
         if self._task and not self._task.done():
             self._task.cancel()
-        players.discard(self.guild.id)
-
-    async def _safe_send(self, embed: discord.Embed) -> None:
-        try:
-            await self.text_channel.send(embed=embed)
-        except (discord.HTTPException, discord.Forbidden) as e:
-            log.debug("Could not send message to guild %s: %s", self.guild.id, e)
+        if self._on_destroy is not None:
+            self._on_destroy(self.guild.id)
 
 
 class PlayerManager:
@@ -491,13 +489,15 @@ class PlayerManager:
     def get(self, guild_id: int) -> Optional[MusicPlayer]:
         return self._players.get(guild_id)
 
-    def get_or_create(self, bot: discord.Client, ctx) -> MusicPlayer:
-        player = self._players.get(ctx.guild.id)
-        if player is None or player._destroyed:
-            player = MusicPlayer(bot, ctx.guild, ctx.channel)
-            self._players[ctx.guild.id] = player
+    def get_or_create(self, bot: discord.Client, guild: discord.Guild,
+                      channel: discord.abc.Messageable) -> MusicPlayer:
+        """The guild's player, creating one if it has none or its last one died."""
+        player = self._players.get(guild.id)
+        if player is None or player.is_destroyed:
+            player = MusicPlayer(bot, guild, channel, on_destroy=self.discard)
+            self._players[guild.id] = player
         else:
-            player.text_channel = ctx.channel   # follow the latest command channel
+            player.text_channel = channel   # follow the latest command channel
         return player
 
     def discard(self, guild_id: int) -> None:

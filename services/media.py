@@ -9,13 +9,12 @@ Design goals:
 - Fast enqueue: searches/playlists use flat extraction (metadata only).
 - Reliable playback: the audio is streamed by yt-dlp itself and piped into
   FFmpeg (``spawn_stream`` + ``make_pipe_source``). yt-dlp owns cookies,
-  signature solving and throttling, which is what makes YouTube work from
-  datacenter IPs — see the note above those functions.
+  signature solving and throttling — see the note above those functions.
 - Non-blocking: every yt-dlp metadata call runs in a thread executor.
 
 Track dict shape::
 
-    {title, url, stream, duration, thumbnail, uploader, source, query}
+    {title, url, duration, thumbnail, uploader, source, query}
 """
 
 import os
@@ -31,6 +30,8 @@ from typing import Optional
 
 import discord
 import yt_dlp
+
+from config import COOKIES_PATH
 
 log = logging.getLogger("loopify.media")
 
@@ -71,10 +72,9 @@ YTDL_OPTIONS = {
 }
 
 # Optional cookies file (helps with age/region-gated or bot-checked videos).
-_cookies_path = os.getenv("COOKIES_PATH")
-if _cookies_path and os.path.exists(_cookies_path):
-    YTDL_OPTIONS["cookiefile"] = _cookies_path
-    log.info("Using cookies from %s", _cookies_path)
+if COOKIES_PATH and os.path.exists(COOKIES_PATH):
+    YTDL_OPTIONS["cookiefile"] = COOKIES_PATH
+    log.info("Using cookies from %s", COOKIES_PATH)
 
 # Search-prefix aliases users can type: "!play sc: lofi" → SoundCloud search.
 _SEARCH_PREFIXES = {
@@ -90,7 +90,6 @@ def _build_track(info: dict, *, query: str = "") -> dict:
     return {
         "title":     info.get("title") or "Unknown Title",
         "url":       info.get("webpage_url") or info.get("url"),
-        "stream":    None,
         "duration":  info.get("duration"),
         "thumbnail": info.get("thumbnail") or _first_thumb(info),
         "uploader":  info.get("uploader") or info.get("channel"),

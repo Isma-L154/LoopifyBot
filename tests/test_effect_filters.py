@@ -57,12 +57,12 @@ def speed_factor(audio_filter: str, source_rate: int) -> float:
 
 @pytest.mark.parametrize("source_rate", SOURCE_RATES)
 def test_nightcore_speed_does_not_depend_on_the_source_rate(source_rate):
-    assert speed_factor(EFFECTS["nightcore"], source_rate) == pytest.approx(1.25, rel=0.02)
+    assert speed_factor(EFFECTS["nightcore"].filter, source_rate) == pytest.approx(1.25, rel=0.02)
 
 
 @pytest.mark.parametrize("source_rate", SOURCE_RATES)
 def test_vaporwave_speed_does_not_depend_on_the_source_rate(source_rate):
-    assert speed_factor(EFFECTS["vaporwave"], source_rate) == pytest.approx(0.8, rel=0.02)
+    assert speed_factor(EFFECTS["vaporwave"].filter, source_rate) == pytest.approx(0.8, rel=0.02)
 
 
 def test_the_hardcoded_form_really_was_rate_dependent():
@@ -81,18 +81,18 @@ def test_the_hardcoded_form_really_was_rate_dependent():
 @pytest.mark.parametrize("name", sorted(EFFECTS))
 def test_every_preset_is_accepted_by_ffmpeg(name):
     """A typo in a filter string would only surface as silence at playback."""
-    rendered_seconds(EFFECTS[name], 48000)      # check=True raises on rejection
+    rendered_seconds(EFFECTS[name].filter, 48000)      # check=True raises on rejection
 
 
 @pytest.mark.parametrize("name", sorted(set(EFFECTS) - {"nightcore", "vaporwave"}))
 def test_non_speed_effects_leave_the_duration_alone(name):
     """Only the two pitch effects are meant to change how long a track runs."""
-    assert speed_factor(EFFECTS[name], 44100) == pytest.approx(1.0, rel=0.05)
+    assert speed_factor(EFFECTS[name].filter, 44100) == pytest.approx(1.0, rel=0.05)
 
 
 @pytest.mark.parametrize("name", sorted(EFFECTS))
 def test_every_preset_produces_audio(name):
-    assert rendered_seconds(EFFECTS[name], 44100) > 0
+    assert rendered_seconds(EFFECTS[name].filter, 44100) > 0
 
 
 # -- resuming in place, through the real audio path ---------------------
@@ -141,6 +141,6 @@ def test_seeking_and_an_effect_apply_together(tone_file):
     """A resumed track keeps the effect that triggered the respawn."""
     with open(tone_file, "rb") as handle:
         source = media.make_pipe_source(
-            handle, ffmpeg_filter=EFFECTS["bassboost"], seek_seconds=20,
+            handle, ffmpeg_filter=EFFECTS["bassboost"].filter, seek_seconds=20,
         )
         assert played_seconds(source) == pytest.approx(10.0, abs=0.3)

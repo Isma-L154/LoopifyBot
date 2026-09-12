@@ -1,19 +1,25 @@
 """
-Lyrics service — uses lyricsgenius (Genius API).
+Lyrics service — Genius, via lyricsgenius.
 
-Required .env variable:
-    GENIUS_TOKEN
+Required .env variable: ``GENIUS_TOKEN`` (see :mod:`config`).
 """
 
-import os
 import asyncio
-import lyricsgenius
+import logging
+from functools import lru_cache
 from typing import Optional
 
+import lyricsgenius
 
-def _get_client() -> lyricsgenius.Genius:
-    token = os.getenv("GENIUS_TOKEN")
-    genius = lyricsgenius.Genius(token, quiet=True, skip_non_songs=True)
+from config import GENIUS_TOKEN
+
+log = logging.getLogger("loopify.lyrics")
+
+
+@lru_cache(maxsize=1)
+def _client() -> lyricsgenius.Genius:
+    """One client for the process — rebuilding it per query buys nothing."""
+    genius = lyricsgenius.Genius(GENIUS_TOKEN, quiet=True, skip_non_songs=True)
     genius.remove_section_headers = False
     return genius
 
@@ -21,28 +27,26 @@ def _get_client() -> lyricsgenius.Genius:
 async def fetch(title: str, artist: str = "", *, loop=None) -> Optional[dict]:
     """
     Search Genius for lyrics.
-    Returns dict with keys: title, artist, lyrics, url — or None.
+
+    Returns a dict with ``title``, ``artist``, ``lyrics`` and ``url``, or None
+    when there is no match or Genius is unreachable — a missing lyric is never
+    a reason to take the bot down.
     """
     loop = loop or asyncio.get_event_loop()
 
     def _search():
-        genius = _get_client()
-        if artist:
-            song = genius.search_song(title, artist)
-        else:
-            song = genius.search_song(title)
-        return song
+        return _client().search_song(title, artist) if artist else _client().search_song(title)
 
     try:
         song = await loop.run_in_executor(None, _search)
-        if not song:
-            return None
-        return {
-            "title":  song.title,
-            "artist": song.artist,
-            "lyrics": song.lyrics,
-            "url":    song.url,
-        }
     except Exception as e:
-        print(f"[Lyrics] Error: {e}")
+        log.warning("Genius lookup failed for %r: %s", title, e)
         return None
+    if not song:
+        return None
+    return {
+        "title":  song.title,
+        "artist": song.artist,
+        "lyrics": song.lyrics,
+        "url":    song.url,
+    }
