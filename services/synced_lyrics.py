@@ -10,11 +10,11 @@ with the time it starts.
 
 import logging
 import re
-
-import aiohttp
 from bisect import bisect_right
 from dataclasses import dataclass
 from typing import Optional
+
+import aiohttp
 
 log = logging.getLogger("loopify.synced")
 
@@ -54,6 +54,55 @@ def parse_lrc(body: str) -> tuple[Line, ...]:
                 at += int(fraction) / 10 ** len(fraction)
             lines.append((at, text))
     return tuple(sorted(lines, key=lambda line: line[0]))
+
+
+# Words that mark a bracketed chunk as video furniture rather than part of the
+# song's name. "(Acoustic Version)" is the song; "(Official Video)" is not.
+_FURNITURE = re.compile(
+    r"[(\[][^)\]]*\b(?:official|video|audio|lyrics?|visuali[sz]er"
+    r"|remaster(?:ed)?|hd|hq|4k|8k|mv|explicit|clean|live|oficial|letra"
+    r"|legendado|sub(?:titulado)?|full album|color coded)\b[^)\]]*[)\]]",
+    re.IGNORECASE)
+# "Song ft. Someone" — databases file a track under its lead artist alone.
+_CREDITS = re.compile(r"\s*\b(?:ft|feat)\.?\s.*$", re.IGNORECASE)
+# A trailing "| Album Name" or "| Official Video".
+_TRAILING_PIPE = re.compile(r"\s*\|.*$")
+# What separates an artist from a title. A run of two or more spaces counts:
+# plenty of uploads write "The Police   Every Breath You Take" with no dash.
+_SEPARATOR = re.compile(r"\s[-–—]\s|\s{2,}")
+# Suffixes YouTube itself adds to a channel name.
+_CHANNEL_NOISE = re.compile(r"\s*-\s*Topic$|\s*VEVO$|\s*Official$", re.IGNORECASE)
+
+
+def _tidy(text: str) -> str:
+    return " ".join(text.split())
+
+
+def search_terms(title: str, uploader: str = "") -> tuple[str, str]:
+    """
+    Turn a video title into the ``(track, artist)`` a lyrics database expects.
+
+    Raw YouTube titles are not song names: they carry video furniture, featured
+    credits and album tags, and the channel is often an aggregator rather than
+    the artist. Searching with them as-is is why some songs came back empty
+    while others worked — measured against LRCLIB, the raw form 404s where the
+    tidied one returns synced lyrics.
+
+    The title is trusted over the channel when it names both, because a channel
+    called "Music n Lyrics" is not who recorded the song.
+    """
+    # Whitespace is collapsed only at the end: a run of two or more spaces is
+    # itself a separator, and tidying first would erase it.
+    cleaned = _CREDITS.sub("", _TRAILING_PIPE.sub("", _FURNITURE.sub("", title))).strip()
+    if not cleaned:
+        cleaned = title.strip()     # all furniture: better to search it than nothing
+
+    artist = _CHANNEL_NOISE.sub("", uploader)
+    halves = _SEPARATOR.split(cleaned, maxsplit=1)
+    if len(halves) == 2 and halves[0].strip() and halves[1].strip():
+        artist, cleaned = halves
+
+    return _tidy(cleaned).strip(" -–—"), _tidy(artist.split(",")[0])
 
 
 def index_at(lines: tuple[Line, ...], position: float) -> int:

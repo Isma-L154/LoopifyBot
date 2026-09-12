@@ -69,9 +69,12 @@ async def handle(ctx, error: Exception) -> None:
         hint = f"\nUsage: `{usage(ctx)}`" if ctx.command is not None else ""
         return await _reply(ctx, f"{_input_detail(error)}{hint}")
 
-    # Anything left is a bug or an outage — the operator's problem, not the
-    # user's. Log it with a traceback and stay quiet in the channel.
+    # Anything left is a bug or an outage. The cause is the operator's problem
+    # and stays in the log — a stack trace in the channel helps nobody — but
+    # saying nothing at all is worse. A TypeError in !lyrics was logged and
+    # never answered, and from the channel the bot simply looked dead.
     log.warning("Error in command %s: %s", ctx.command, error, exc_info=error)
+    await _reply(ctx, "Something went wrong on my side. It has been logged.")
 
 
 async def _reply(ctx, message: str) -> None:

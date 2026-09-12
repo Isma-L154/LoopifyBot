@@ -8,10 +8,16 @@ import discord
 from discord.ext import commands
 
 from services import lyrics_api, synced_lyrics
-from services.synced_lyrics import Lyrics, index_at
+# Deliberately not `from ... import Lyrics`: the cog class below is called
+# Lyrics too, and importing the bare name let it shadow the dataclass. The
+# Genius fallback then built a Cog instead of a result and raised TypeError,
+# which the command reported as nothing at all.
+from services.synced_lyrics import index_at, search_terms
 from utils.embeds import (error_embed, info_embed, lyrics_embed, lyrics_pages,
                           synced_lyrics_embed)
 from utils.player import players
+
+LyricsResult = synced_lyrics.Lyrics
 
 log = logging.getLogger("loopify.lyrics")
 
@@ -28,7 +34,7 @@ MIN_EDIT_INTERVAL = 1.5
 MAX_SLEEP = 2.0
 MIN_SLEEP = 0.25
 
-Loader = Callable[[dict], Awaitable[Optional[Lyrics]]]
+Loader = Callable[[dict], Awaitable[Optional[LyricsResult]]]
 
 
 class LyricsFollower:
@@ -55,7 +61,7 @@ class LyricsFollower:
     async def run(self) -> None:
         """Follow the music until the song, the player or the message runs out."""
         track: Optional[dict] = None
-        lyrics: Optional[Lyrics] = None
+        lyrics: Optional[LyricsResult] = None
         shown: Optional[int] = None
         last_edit = float("-inf")
 
@@ -80,7 +86,7 @@ class LyricsFollower:
 
             await self._sleep(self._until_next_line(lyrics.lines, index, position))
 
-    async def _show(self, lyrics: Lyrics, index: int, position: float,
+    async def _show(self, lyrics: LyricsResult, index: int, position: float,
                     track: Optional[dict]) -> bool:
         """Redraw the message. False means it is gone and we should stop."""
         try:
@@ -183,7 +189,7 @@ class Lyrics(commands.Cog, name="\U0001f3a4 Lyrics"):
         return query.strip(), ""
 
     async def _find(self, title: str, artist: str,
-                    duration: Optional[float]) -> Optional[Lyrics]:
+                    duration: Optional[float]) -> Optional[LyricsResult]:
         """LRCLIB first, since it is the only source with timings, then Genius."""
         found = await synced_lyrics.fetch(self._session, title, artist, duration)
         if found is not None:
@@ -191,13 +197,28 @@ class Lyrics(commands.Cog, name="\U0001f3a4 Lyrics"):
         fallback = await lyrics_api.fetch(title, artist)
         if fallback is None:
             return None
-        return Lyrics(title=fallback["title"], artist=fallback["artist"],
-                      plain=fallback["lyrics"])
+        return LyricsResult(title=fallback["title"], artist=fallback["artist"],
+                            plain=fallback["lyrics"])
 
-    async def _for_track(self, track: dict) -> Optional[Lyrics]:
-        return await self._find(track.get("title", ""),
-                                track.get("uploader") or "",
-                                track.get("duration"))
+    async def _search(self, query: str) -> Optional[LyricsResult]:
+        """
+        Look up a typed query, in either order.
+
+        The help documents ``<title> - <artist>``, but ``The Police - Every
+        Breath You Take`` is how people actually type it. The documented order
+        is tried first, and the other only if it found nothing.
+        """
+        title, artist = self._split_query(query)
+        found = await self._find(title, artist, None)
+        if found is None and artist:
+            found = await self._find(artist, title, None)
+        return found
+
+    async def _for_track(self, track: dict) -> Optional[LyricsResult]:
+        """Look a playing track up, with its title tidied into search terms."""
+        title, artist = search_terms(track.get("title") or "",
+                                     track.get("uploader") or "")
+        return await self._find(title, artist, track.get("duration"))
 
     # -- Following -----------------------------------------------------
 
@@ -211,7 +232,7 @@ class Lyrics(commands.Cog, name="\U0001f3a4 Lyrics"):
         if not task.done():
             task.cancel()
 
-    async def _follow(self, ctx, player, lyrics: Lyrics) -> None:
+    async def _follow(self, ctx, player, lyrics: LyricsResult) -> None:
         """Post the live message and start keeping it up to date."""
         self.stop_following(ctx.guild.id)      # one per guild; the newest wins
         index = index_at(lyrics.lines, player.position)
@@ -243,8 +264,8 @@ class Lyrics(commands.Cog, name="\U0001f3a4 Lyrics"):
         async with ctx.typing():
             player = players.get(ctx.guild.id)
             if query:
-                title, artist = self._split_query(query)
-                found = await self._find(title, artist, None)
+                title = self._split_query(query)[0]
+                found = await self._search(query)
             elif player and player.current:
                 title = player.current.get("title", "")
                 found = await self._for_track(player.current)

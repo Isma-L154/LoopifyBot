@@ -138,11 +138,24 @@ async def test_a_command_with_its_own_handler_is_left_alone(ctx):
     ctx.send.assert_not_awaited()
 
 
-async def test_an_unexpected_error_is_logged_not_shown(ctx, caplog):
-    """Internal failures are the operator's problem, not the user's."""
+async def test_an_unexpected_error_is_acknowledged_and_logged(ctx, caplog):
+    """
+    Staying quiet here was a mistake, and a real one: a TypeError in !lyrics was
+    logged and never answered, so from the channel the bot looked dead. The
+    details stay in the log, but the user gets told something happened.
+    """
     await errors.handle(ctx, RuntimeError("something broke internally"))
-    ctx.send.assert_not_awaited()
-    assert "something broke internally" in caplog.text
+
+    assert "went wrong" in sent_text(ctx).lower()
+    assert "something broke internally" in caplog.text, "the operator still needs it"
+
+
+async def test_the_acknowledgement_leaks_no_internals(ctx):
+    """A stack trace or an exception message in the channel helps nobody."""
+    await errors.handle(ctx, RuntimeError("AttributeError at /srv/secret/path.py"))
+
+    reply = sent_text(ctx)
+    assert "AttributeError" not in reply and "/srv" not in reply
 
 
 async def test_the_original_exception_is_unwrapped(ctx):
