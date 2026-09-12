@@ -8,7 +8,7 @@ import config
 from config import COGS, COMMAND_PREFIX, DISCORD_TOKEN
 from utils import errors
 from utils.help import build as build_help
-from utils.startup import start as start_bot
+from utils.startup import serve
 
 config.configure_logging()
 config.log_runtime()
@@ -60,8 +60,9 @@ async def main():
                 log.info("Loaded cog: %s", cog)
             except Exception:
                 log.exception("Failed to load cog: %s", cog)
-        # Not bot.start(): the login half of it needs retrying.
-        await start_bot(bot, DISCORD_TOKEN)
+        # Not bot.start(): the login needs retrying, and voice has to be
+        # released within a bound before close() waits it out. See utils.startup.
+        await serve(bot, DISCORD_TOKEN)
 
 
 if __name__ == "__main__":

@@ -15,6 +15,12 @@ log = logging.getLogger("loopify.music")
 # Query length cap — guards against absurd input before it reaches yt-dlp.
 MAX_QUERY_LEN = 500
 
+# How long to wait for a voice connection. discord.py reuses this same value as
+# the deadline for Discord to confirm a *departure* while closing, so it is also
+# the worst case a shutdown can take — it must stay under the unit's
+# TimeoutStopSec or systemd kills the process mid-teardown. See issue #35.
+VOICE_CONNECT_TIMEOUT = 20.0
+
 
 def _is_playlist_url(query: str) -> bool:
     """Detect playlist/set/album URLs across supported sites."""
@@ -44,7 +50,7 @@ class Music(commands.Cog, name="🎵 Music & Queue"):
         vc = ctx.voice_client
         try:
             if vc is None:
-                await dest.connect(timeout=20, reconnect=True)
+                await dest.connect(timeout=VOICE_CONNECT_TIMEOUT, reconnect=True)
             elif vc.channel != dest:
                 await vc.move_to(dest)
             return True
