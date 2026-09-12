@@ -15,7 +15,7 @@ import pytest
 # Make the project importable without installing it.
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from utils.player import MusicPlayer, players  # noqa: E402
+from utils.player import MusicPlayer  # noqa: E402
 
 
 def make_track(title: str = "Track", **overrides) -> dict:
@@ -23,7 +23,6 @@ def make_track(title: str = "Track", **overrides) -> dict:
     track = {
         "title": title,
         "url": f"https://example.invalid/{title.replace(' ', '_')}",
-        "stream": None,
         "duration": 180,
         "thumbnail": None,
         "uploader": "Uploader",
@@ -70,17 +69,19 @@ def fake_guild():
 
 @pytest.fixture
 def player(fake_bot, fake_guild):
-    """A MusicPlayer whose background loop is never started."""
-    p = MusicPlayer(fake_bot, fake_guild, MagicMock())
-    yield p
-    # Keep the module-level singleton clean between tests.
-    players.discard(fake_guild.id)
+    """
+    A MusicPlayer whose background loop is never started.
+
+    No cleanup needed: the player is told who to notify on destroy rather than
+    registering itself in a module-level singleton, so nothing here leaks into
+    the next test.
+    """
+    return MusicPlayer(fake_bot, fake_guild, MagicMock())
 
 
 @pytest.fixture
 def clock_at_180(player, monkeypatch):
     """A player 180 seconds into whatever it is playing."""
-    import time as _time
     from utils import player as player_module
 
     base = 1000.0

@@ -5,8 +5,9 @@ import discord
 from discord.ext import commands
 
 import config
-from config import DISCORD_TOKEN, COMMAND_PREFIX, COGS
+from config import COGS, COMMAND_PREFIX, DISCORD_TOKEN
 from utils import errors
+from utils.help import build as build_help
 
 config.configure_logging()
 config.log_runtime()
@@ -21,12 +22,10 @@ intents.voice_states = True
 bot = commands.Bot(
     command_prefix=COMMAND_PREFIX,
     intents=intents,
-    help_command=None,        # custom help below
+    help_command=None,        # replaced by the generated one below
     case_insensitive=True,
 )
 
-
-# ── Events ────────────────────────────────────────────────────────────
 
 @bot.event
 async def on_ready():
@@ -46,37 +45,11 @@ async def on_command_error(ctx, error):
     await errors.handle(ctx, error)
 
 
-# ── Custom help command ───────────────────────────────────────────────
-
 @bot.command(name="help")
 async def help_command(ctx):
-    p = COMMAND_PREFIX
-    embed = discord.Embed(title="🎵 Music Bot — Commands", color=0x1DB954)
-    embed.add_field(name="▶️ Playback", value=(
-        f"`{p}play <song/url>` — Play from YouTube, SoundCloud or a link\n"
-        f"`{p}pause` · `{p}resume` · `{p}skip` · `{p}previous`\n"
-        f"`{p}stop` — Stop & disconnect\n"
-        f"`{p}nowplaying` — Show current track"
-    ), inline=False)
-    embed.add_field(name="📋 Queue", value=(
-        f"`{p}queue [page]` · `{p}shuffle` · `{p}remove <#>`\n"
-        f"`{p}move <from> <to>` · `{p}clear`\n"
-        f"`{p}loop <track|queue|off>` · `{p}autoplay`"
-    ), inline=False)
-    embed.add_field(name="🎛️ Effects", value=(
-        f"`{p}bass` `{p}bassboost` `{p}nightcore` `{p}vaporwave`\n"
-        f"`{p}treble` `{p}echo` `{p}8d` `{p}karaoke` `{p}reset`\n"
-        f"`{p}effects` — List all effects"
-    ), inline=False)
-    embed.add_field(name="🎤 Extras", value=(
-        f"`{p}lyrics [song]` — Get song lyrics\n"
-        f"`{p}volume <0-100>` — Set volume"
-    ), inline=False)
-    embed.set_footer(text=f"Tip: {p}play works with YouTube/SoundCloud searches (use sc:) and most links yt-dlp supports!")
-    await ctx.send(embed=embed)
+    """Show this message."""
+    await ctx.send(embed=build_help(bot, COMMAND_PREFIX))
 
-
-# ── Load cogs & run ───────────────────────────────────────────────────
 
 async def main():
     async with bot:

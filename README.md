@@ -58,6 +58,7 @@ A fully-featured Discord music bot built with Python. Supports YouTube and Sound
 | `!8d` | Apply 8D audio (use headphones!) |
 | `!karaoke` | Remove center vocals |
 | `!reset` | Remove all audio effects |
+| `!effect` | Show which effect is currently active |
 | `!effects` | List all available effects |
 
 ### 🎤 Extras

@@ -15,7 +15,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from cogs.music import Music, MAX_QUERY_LEN, _is_playlist_url
-from cogs.effects import Effects
+from cogs.effects import EFFECTS, Effects
 from utils.player import players
 
 
@@ -78,7 +78,7 @@ async def test_skip_with_nothing_playing_reports_it(music_cog, ctx):
 
 async def test_skip_with_an_empty_queue_does_not_raise(music_cog, ctx, fake_bot, fake_guild):
     """An empty queue must not crash the command."""
-    player = players.get_or_create(fake_bot, ctx)
+    player = players.get_or_create(fake_bot, ctx.guild, ctx.channel)
     try:
         player.queue.clear()
         fake_guild.voice_client = None
@@ -161,15 +161,34 @@ async def test_move_with_no_player(music_cog, ctx):
 
 # -- effects with no active player -------------------------------------
 
+async def apply(effects_cog, ctx, name: str):
+    """Invoke the effect command the way Discord would, as the named alias."""
+    ctx.invoked_with = name
+    await Effects.apply_effect.callback(effects_cog, ctx)
+
+
+@pytest.mark.parametrize("name", sorted(EFFECTS))
+async def test_every_effect_name_is_dispatchable(effects_cog, ctx, name):
+    """
+    Every key in EFFECTS must be reachable as a command.
+
+    The commands are registered as aliases of one handler, so a key that never
+    made it into the alias list would only fail at runtime, in Discord.
+    """
+    assert name in {Effects.apply_effect.name, *Effects.apply_effect.aliases}
+    await apply(effects_cog, ctx, name)
+    assert "Nothing is playing" in sent_text(ctx)
+
+
 async def test_effect_command_with_no_player(effects_cog, ctx):
-    await Effects.bassboost.callback(effects_cog, ctx)
+    await apply(effects_cog, ctx, "bassboost")
     assert "Nothing is playing" in sent_text(ctx)
 
 
 async def test_effect_changes_are_throttled_per_guild(effects_cog, ctx):
-    await Effects.bass.callback(effects_cog, ctx)
+    await apply(effects_cog, ctx, "bass")
     ctx.send.reset_mock()
-    await Effects.nightcore.callback(effects_cog, ctx)
+    await apply(effects_cog, ctx, "nightcore")
     assert "wait" in sent_text(ctx).lower(), "a second effect inside the cooldown must be refused"
 
 
