@@ -1,0 +1,150 @@
+"""
+How the command decides what to look up, and what it does with the answer.
+
+The gap these close is a real one: the cog's own class is called ``Lyrics`` and
+it shadowed the dataclass of the same name, so the Genius fallback raised
+``TypeError: Lyrics.__init__() got an unexpected keyword argument 'title'`` and
+the command answered nothing at all. No test reached that path.
+"""
+
+from unittest.mock import AsyncMock, MagicMock
+
+import pytest
+
+from cogs.lyrics import Lyrics as LyricsCog
+from services import lyrics_api, synced_lyrics
+
+GENIUS_HIT = {
+    "title": "Every Breath You Take",
+    "artist": "The Police",
+    "lyrics": "Every breath you take",
+    "url": "https://genius.invalid/song",
+}
+
+
+@pytest.fixture
+def cog():
+    return LyricsCog(MagicMock())
+
+
+@pytest.fixture
+def no_lrclib(monkeypatch):
+    monkeypatch.setattr(synced_lyrics, "fetch", AsyncMock(return_value=None))
+
+
+# -- the crash that produced silence -----------------------------------
+
+async def test_the_genius_fallback_produces_lyrics(cog, no_lrclib, monkeypatch):
+    """This raised TypeError in production, and the user saw nothing at all."""
+    monkeypatch.setattr(lyrics_api, "fetch", AsyncMock(return_value=GENIUS_HIT))
+
+    found = await cog._find("Every Breath You Take", "The Police", None)
+
+    assert found.title == "Every Breath You Take"
+    assert found.artist == "The Police"
+    assert found.plain == "Every breath you take"
+    assert found.synced is False
+
+
+async def test_nothing_anywhere_is_not_an_error(cog, no_lrclib, monkeypatch):
+    monkeypatch.setattr(lyrics_api, "fetch", AsyncMock(return_value=None))
+
+    assert await cog._find("zxqwv", "", None) is None
+
+
+async def test_lrclib_wins_when_it_has_the_song(cog, monkeypatch):
+    """Genius has no timings, so it is only ever the fallback."""
+    synced = synced_lyrics.Lyrics("T", "A", lines=((0.0, "line"),))
+    monkeypatch.setattr(synced_lyrics, "fetch", AsyncMock(return_value=synced))
+    genius = AsyncMock(return_value=GENIUS_HIT)
+    monkeypatch.setattr(lyrics_api, "fetch", genius)
+
+    found = await cog._find("T", "A", None)
+
+    assert found.synced is True
+    genius.assert_not_awaited()
+
+
+# -- what gets searched for --------------------------------------------
+
+async def test_a_track_is_looked_up_with_tidied_terms(cog, monkeypatch):
+    """
+    The reported failure: the raw video title and the channel name 404 on
+    LRCLIB, where the tidied pair returns synced lyrics.
+    """
+    seen = {}
+
+    async def spy(session, title, artist, duration):
+        seen.update(title=title, artist=artist, duration=duration)
+        return None
+
+    monkeypatch.setattr(synced_lyrics, "fetch", spy)
+    monkeypatch.setattr(lyrics_api, "fetch", AsyncMock(return_value=None))
+
+    await cog._for_track({
+        "title": "The Police   Every Breath You Take (Lyrics)",
+        "uploader": "Music n Lyrics",
+        "duration": 253,
+    })
+
+    assert seen == {"title": "Every Breath You Take",
+                    "artist": "The Police", "duration": 253}
+
+
+async def test_a_track_with_no_uploader_still_searches(cog, monkeypatch):
+    seen = {}
+
+    async def spy(session, title, artist, duration):
+        seen.update(title=title, artist=artist)
+        return None
+
+    monkeypatch.setattr(synced_lyrics, "fetch", spy)
+    monkeypatch.setattr(lyrics_api, "fetch", AsyncMock(return_value=None))
+
+    await cog._for_track({"title": "Some Song", "uploader": None, "duration": None})
+
+    assert seen == {"title": "Some Song", "artist": ""}
+
+
+# -- a typed query, either way round -----------------------------------
+
+async def test_a_typed_query_is_tried_both_ways_round(cog, monkeypatch):
+    """
+    The help says `<title> - <artist>`, but `The Police - Every Breath You Take`
+    is the way people actually type it. Both should work.
+    """
+    tried = []
+
+    async def spy(session, title, artist, duration):
+        tried.append((title, artist))
+        return synced_lyrics.Lyrics("Every Breath You Take", "The Police",
+                                    plain="words") if artist == "The Police" else None
+
+    monkeypatch.setattr(synced_lyrics, "fetch", spy)
+    monkeypatch.setattr(lyrics_api, "fetch", AsyncMock(return_value=None))
+
+    found = await cog._search("The Police - Every Breath You Take")
+
+    assert found is not None, "the artist-first order found nothing"
+    assert tried[0] == ("The Police", "Every Breath You Take"), "documented order first"
+
+
+async def test_the_documented_order_is_not_searched_twice(cog, monkeypatch):
+    """A hit on the first try must not cost a second request."""
+    hit = synced_lyrics.Lyrics("Bohemian Rhapsody", "Queen", plain="words")
+    fetch = AsyncMock(return_value=hit)
+    monkeypatch.setattr(synced_lyrics, "fetch", fetch)
+
+    await cog._search("Bohemian Rhapsody - Queen")
+
+    assert fetch.await_count == 1
+
+
+async def test_a_query_without_a_separator_is_searched_once(cog, monkeypatch):
+    fetch = AsyncMock(return_value=None)
+    monkeypatch.setattr(synced_lyrics, "fetch", fetch)
+    monkeypatch.setattr(lyrics_api, "fetch", AsyncMock(return_value=None))
+
+    await cog._search("Bohemian Rhapsody")
+
+    assert fetch.await_count == 1, "there is no other order to try"
