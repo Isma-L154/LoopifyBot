@@ -105,11 +105,26 @@ pytest
 
 The suite needs **no credentials, no network and no `.env`** — it mocks the
 Discord gateway and never calls yt-dlp. It covers queue and player state, the
-`_advance` state machine (loop modes, skip, replay, autoplay, idle timeout),
-the `services.media` helpers, the voice-state guards, and the command edge
-cases. CI runs it on every push and pull request against Python 3.11 and 3.12.
+`_advance` state machine (loop modes, skip, replay, autoplay, idle timeout), the
+read-ahead buffer and stream teardown, the `services.media` helpers, the
+voice-state guards, the command edge cases, the generated `!help`, the Genius
+client, and startup/shutdown behaviour — including that a login survives a DNS
+outage and that the process stops inside the time systemd allows.
 
-### Deploy to AWS (t4g.micro, ~$6/mo or free tier)
-See **[deploy/README.md](deploy/README.md)** for a full walkthrough: launch script,
-provisioning (`deploy/setup.sh`) and a `systemd` service that auto-restarts and
-starts on boot.
+A few tests render audio through **real FFmpeg** to measure the pitch and speed
+filters, since a wrong filter string looks perfectly reasonable and only shows up
+as the wrong playback speed. Those skip automatically if FFmpeg is not installed.
+
+CI runs everything on every push and pull request against Python 3.11 and 3.12.
+
+### Deploy to a server
+See **[deploy/README.md](deploy/README.md)** for the full walkthrough:
+provisioning (`deploy/setup.sh`), a `systemd` service that auto-restarts and
+starts on boot, self-updating with `deploy/update.sh`, and a daily timer that
+keeps `yt-dlp` current.
+
+The hosted instance runs on a **self-hosted Linux box on a residential
+connection**, not a cloud VM. That is a YouTube decision, not a cost one: from a
+datacenter IP the bot needed a cookies file that expired every few weeks, and
+from a residential IP the same requests work with none. Deploying to a cloud VM
+is still supported and documented, with that caveat.

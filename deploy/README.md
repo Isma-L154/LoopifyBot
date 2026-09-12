@@ -1,38 +1,34 @@
-# Deployment — AWS EC2 (t4g.micro, ARM)
+# Deployment
 
-This bot is designed to run on the cheapest always-on AWS instance: a
-**t4g.micro** (ARM Graviton, 1 GB RAM, free-tier eligible). FFmpeg audio
-streaming is CPU-light and memory-frugal thanks to lazy stream resolution, so
-1 GB is enough for a single-guild-at-a-time music bot.
+The bot runs on a **self-hosted Linux box on a residential connection** —
+a spare laptop or mini PC with Ubuntu Server is plenty. It was previously
+deployed to an AWS `t4g.micro`; that path still works and is documented at the
+bottom, but the move off it was not about cost.
 
-## What gets created
+## Why not a cloud VM
 
-| Resource        | Value                                            |
-|-----------------|--------------------------------------------------|
-| Instance type   | `t4g.micro` (ARM)                                |
-| AMI             | Ubuntu 24.04 LTS (arm64)                          |
-| Disk            | 8 GB gp3                                          |
-| Security group  | inbound SSH (22) from your IP only; all outbound |
-| Service         | `loopify-bot` (systemd, auto-restart, boot-start)|
+YouTube treats **datacenter IP ranges** (AWS, GCP, …) as suspect. From EC2 the
+bot needed a cookies file exported from a logged-in account, and those cookies
+expired every few weeks — a recurring chore with a dead bot at the end of it
+whenever it was forgotten.
 
-The bot makes only **outbound** connections (Discord, YouTube, SoundCloud), so no
-inbound ports beyond SSH are required.
+From a residential IP the same requests work **with no cookies at all**, and
+time-to-first-byte measured 4.3 s against 9.1 s on EC2. A residential IP does not
+*remove* YouTube's bot-checking (see the player-client note below), but combined
+with the right client chain it removes the need for credentials.
 
-## 1. Launch the instance
+The trade is that the host is now your problem: power, network, and the disk it
+boots from. FFmpeg audio streaming is CPU-light and memory-frugal, so the machine
+itself barely notices — the service is capped at 768 MB and rarely peaks past
+half of that.
 
-The exact AWS CLI commands used to launch and tag the instance live in
-[`launch_ec2.sh`](launch_ec2.sh). Run it from a machine with the AWS CLI
-configured, or follow it step by step.
+## 1. Provision the host
 
-## 2. Provision it
-
-**Clone** the repo on the instance — do not copy the files over. A git checkout
-is what makes `deploy/update.sh` work later and lets the bot report which commit
-it is running:
+Any Ubuntu 24.04 machine works. **Clone** the repo — do not copy the files over.
+A git checkout is what makes `deploy/update.sh` work later, and what lets the bot
+report which commit it is running:
 
 ```bash
-ssh -i <key>.pem ubuntu@<EC2_IP>
-
 git clone https://github.com/Isma-L154/LoopifyBot.git ~/LoopifyBot
 cd ~/LoopifyBot
 bash deploy/setup.sh
@@ -42,33 +38,37 @@ bash deploy/setup.sh
 systemd units: the `loopify-bot` service and a daily `loopify-ytdlp-update`
 timer. It is idempotent, so re-running it is safe.
 
-## 3. Add secrets and start
+For an always-on box, also worth doing: ignore the lid if it is a laptop
+(`logind.conf.d`), mask the suspend targets, and enable `unattended-upgrades`.
 
-Secrets are **never** committed. Create the `.env` directly on the instance:
+## 2. Add secrets and start
+
+Secrets are **never** committed. Create the `.env` directly on the host:
 
 ```bash
 cp .env.example .env
-nano .env            # fill in DISCORD_TOKEN (and Spotify/Genius if used)
+nano .env            # fill in DISCORD_TOKEN (and GENIUS_TOKEN for !lyrics)
 sudo systemctl start loopify-bot
-sudo systemctl status loopify-bot
-sudo journalctl -u loopify-bot -f      # live logs — look for "Logged in as ..."
+sudo journalctl -u loopify-bot -f      # look for "Logged in as ..."
 ```
 
-## Updating the bot later
+## 3. Updating later
 
 ```bash
-ssh -i <key>.pem ubuntu@<EC2_IP>
 cd ~/LoopifyBot && bash deploy/update.sh
 ```
 
-`update.sh` pulls, reinstalls dependencies **only if `requirements.txt`
-changed**, restarts the service, and then verifies it actually came back up —
-printing recent logs and failing loudly if it did not.
+`update.sh` pulls, reinstalls dependencies **only if `requirements.txt` changed**,
+reinstalls the systemd units, restarts the service, and then verifies it actually
+came back — printing recent logs and failing loudly if it did not.
+
+The units are reinstalled every time on purpose: a pull can change how the bot is
+*run* (sandboxing, resource caps, stop timeouts), and restarting alone would keep
+the old configuration while the repo claimed otherwise.
 
 ### If the host was deployed by copying files instead of cloning
 
-`update.sh` refuses to run and tells you how to convert it in place. The short
-version, from the app directory:
+`update.sh` refuses to run and tells you how to convert it in place:
 
 ```bash
 git init -b main
@@ -79,20 +79,19 @@ git reset --hard origin/main     # discards local edits — check first
 ```
 
 The `--set-upstream-to` line matters: without it `update.sh` has nothing to pull
-from and stops with an explanation.
-
-`.env` and `cookies.txt` are gitignored, so they survive this untouched.
+from and stops with an explanation. `.env` and `cookies.txt` are gitignored, so
+they survive untouched.
 
 ### Knowing what is actually running
 
 The bot logs its versions at startup, so `journalctl` answers this directly:
 
-```
-Running commit 0a90877 — yt-dlp 2026.08.19, FFmpeg 6.1.1-3ubuntu5, Python 3.12.3
-```
-
 ```bash
 sudo journalctl -u loopify-bot | grep "Running commit" | tail -1
+```
+
+```
+Running commit 1ea2431 — yt-dlp 2026.08.19, FFmpeg 6.1.1-3ubuntu5, Python 3.12.3
 ```
 
 ## Keeping yt-dlp current — automatically
@@ -116,43 +115,63 @@ fails — a newer dependency is never worth trading a running bot for.
 `Persistent=true` means it catches up after downtime rather than silently
 skipping, which matters on a machine that is not on 24/7.
 
-## 🎬 YouTube from cloud IPs — how it's made to work
+## 🎬 What actually makes YouTube work
 
-YouTube fights bots on **datacenter IPs** (AWS, GCP…) on two fronts, and the bot
-handles both so playback works from EC2:
+Four things, in order of how much they matter:
 
-1. **"Sign in to confirm you're not a bot"** → defeated with **cookies** from a
-   logged-in account (`COOKIES_PATH`).
-2. **JS signature ("nsig") challenge** on the web player → solved with **Deno**,
-   which `setup.sh` installs automatically.
-3. **Session-bound stream URLs** (which 403 if FFmpeg fetches them directly) →
-   avoided by having **yt-dlp stream the audio and pipe it into FFmpeg**, so
-   yt-dlp (with the cookies/session) does the fetching. This is built into the bot.
+1. **The player-client chain.** yt-dlp can impersonate several YouTube clients,
+   and most of them are bot-checked. Measured from a residential IP against the
+   same video: `web_embedded` works (~3.2 s), `mweb` works but is slow (~9.3 s),
+   and `default`, `web`, `android_vr`, `tv`, `ios` and `android_music` are **all**
+   bot-checked. The chain the bot uses is `web_embedded,mweb,tv_embedded` —
+   getting this right is what removed the need for cookies.
+2. **Deno**, for the JS signature (`nsig`) challenge on the web player.
+   `setup.sh` installs it.
+3. **yt-dlp does the fetching**, streaming the audio to stdout and piping it into
+   FFmpeg. Handing a `googlevideo` URL straight to FFmpeg gets a 403, because
+   those URLs are bound to the session that requested them.
+4. **A residential IP**, which reduces the bot-checking but does not remove it.
 
-### Keeping YouTube working: refresh the cookies
+### Cookies: supported, no longer needed
 
-Cookies are the one thing that expires. When YouTube starts getting blocked,
-export fresh ones and drop them in:
-
-```bash
-# Export from a browser logged into a THROWAWAY YouTube account, Netscape format
-# (e.g. the "Get cookies.txt LOCALLY" extension), then:
-scp -i <key>.pem cookies.txt ubuntu@<EC2_IP>:~/LoopifyBot/cookies.txt
-ssh -i <key>.pem ubuntu@<EC2_IP> "chmod 600 ~/LoopifyBot/cookies.txt && sudo systemctl restart loopify-bot"
-```
-
-Use a throwaway account — cookies grant access to it. Refresh every few weeks.
+`COOKIES_PATH` still works if you want it, and helps with age- or region-gated
+videos. It is no longer part of normal operation. If you do use one, export it
+from a **throwaway** account — cookies grant access to it — and `chmod 600` it.
 
 ### Always-available fallback: SoundCloud
 
-SoundCloud has none of these blocks and needs no cookies: `!play sc: <song>` or
-paste a SoundCloud track/set URL. If YouTube ever blocks a track, the bot doesn't
-crash — it posts a message suggesting SoundCloud and moves to the next track.
+SoundCloud has none of these blocks and needs no credentials: `!play sc: <song>`,
+or paste a track/set URL. If YouTube ever blocks a track the bot does not crash —
+it posts a message suggesting SoundCloud and moves on to the next track.
 
-## Cost & teardown
+## Operational notes
 
-- ~**$6/month** on-demand (or free under the 12-month free tier: 750 h/month).
-- To stop billing entirely, terminate the instance:
-  ```bash
-  aws ec2 terminate-instances --instance-ids <id>
-  ```
+**Daily upgrades restart the bot.** With `unattended-upgrades` enabled,
+`needrestart` restarts the service whenever it upgrades something the bot links
+against. If that upgrade is glibc, the DNS resolver is being replaced at the same
+moment, so a login can land on a resolver that is briefly unavailable. The bot
+retries the login with backoff rather than exiting (see `utils/startup.py`).
+
+**Stop timeouts are coupled to the voice timeout.** `TimeoutStopSec` must stay
+above `cogs.music.VOICE_CONNECT_TIMEOUT`, because discord.py reuses the voice
+*connect* timeout as the deadline for Discord to confirm a *departure* while
+closing. With the two the wrong way round, systemd SIGKILLs a shutdown that was
+going to finish — and a SIGKILL skips the reaping of the FFmpeg and yt-dlp
+children. `tests/test_shutdown.py` enforces the ordering.
+
+## Running on a cloud VM instead
+
+Still supported, with the caveat above: from a datacenter IP you will probably
+need a cookies file, and it will expire.
+
+[`launch_ec2.sh`](launch_ec2.sh) holds the AWS CLI commands to launch a
+`t4g.micro` (ARM Graviton, 1 GB RAM, free-tier eligible) with a security group
+allowing inbound SSH from your IP only. The bot makes only **outbound**
+connections, so nothing else needs opening. Then provision it exactly as above.
+
+Cost is roughly **$6/month** on-demand, or free for 12 months under the free tier
+(750 h/month). To stop billing entirely, terminate it:
+
+```bash
+aws ec2 terminate-instances --instance-ids <id>
+```
