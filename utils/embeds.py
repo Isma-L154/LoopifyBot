@@ -97,15 +97,84 @@ def info_embed(title: str, message: str) -> discord.Embed:
     return discord.Embed(title=title, description=message, color=BLURPLE)
 
 
-def lyrics_embed(title: str, artist: str, lyrics: str) -> list[discord.Embed]:
-    """Split lyrics across as many embeds as Discord's length limit requires."""
-    max_len = 4000
-    chunks = [lyrics[i:i + max_len] for i in range(0, len(lyrics), max_len)]
-    return [
-        discord.Embed(
-            title=f"🎤 {title} — {artist}" if i == 0 else f"🎤 {title} (cont.)",
-            description=chunk,
-            color=GOLD,
-        )
-        for i, chunk in enumerate(chunks)
-    ]
+EMBED_LIMIT = 4000       # Discord's cap on an embed description
+CONTEXT_LINES = 2        # lines shown either side of the one playing
+
+
+def clock(seconds: float) -> str:
+    """``3:46`` — a position readout, not a duration. Minutes never roll over."""
+    seconds = max(0, int(seconds))
+    return f"{seconds // 60}:{seconds % 60:02d}"
+
+
+def lyrics_window(lines, index: int, context: int = CONTEXT_LINES) -> str:
+    """
+    The line playing now, with a little of what came before and what is next.
+
+    ``index`` of -1 means the song has not reached its first line yet — during an
+    intro nothing is highlighted, but what is coming is still shown. A timed line
+    with no words is an instrumental gap and reads as one.
+    """
+    if not lines:
+        return ""
+    first = max(0, index - context)
+    rendered = []
+    for position in range(first, min(len(lines), max(index, 0) + context + 1)):
+        text = lines[position][1] or "♪"
+        rendered.append(f"**▶ {text}**" if position == index else f"　{text}")
+    return "\n".join(rendered)
+
+
+def lyrics_pages(text: str, limit: int = EMBED_LIMIT) -> list[str]:
+    """
+    Split lyrics into embed-sized pages, breaking between lines.
+
+    Slicing at a fixed character count cuts words, and sometimes whole verses,
+    in half. A single line longer than the limit still has to be broken, but
+    that is rare enough to be worth handling bluntly.
+    """
+    pages: list[str] = []
+    current = ""
+    for line in text.split("\n"):
+        while len(line) > limit:
+            if current:
+                pages.append(current)
+                current = ""
+            pages.append(line[:limit])
+            line = line[limit:]
+        candidate = f"{current}\n{line}" if current else line
+        if len(candidate) > limit:
+            pages.append(current)
+            current = line
+        else:
+            current = candidate
+    pages.append(current)
+    return pages
+
+
+def synced_lyrics_embed(title: str, artist: str, lines, index: int,
+                        position: float, duration: Optional[float]) -> discord.Embed:
+    """The live view: a window on the lyrics plus where the song is."""
+    embed = discord.Embed(
+        title=f"🎤 {title} — {artist}",
+        description=lyrics_window(lines, index),
+        color=GOLD,
+    )
+    total = f" / {clock(duration)}" if duration else ""
+    embed.set_footer(text=f"{clock(position)}{total}")
+    return embed
+
+
+def lyrics_embed(title: str, artist: str, lyrics: str,
+                 page: int = 0, note: str = "") -> discord.Embed:
+    """One page of static lyrics."""
+    pages = lyrics_pages(lyrics)
+    page = max(0, min(page, len(pages) - 1))
+    embed = discord.Embed(
+        title=f"🎤 {title} — {artist}",
+        description=pages[page],
+        color=GOLD,
+    )
+    footer = f"Page {page + 1}/{len(pages)}" if len(pages) > 1 else ""
+    embed.set_footer(text=" • ".join(part for part in (footer, note) if part))
+    return embed

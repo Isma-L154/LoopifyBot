@@ -15,9 +15,13 @@ _EFFECT_COOLDOWN = 3.0
 
 @dataclass(frozen=True)
 class Effect:
-    """An FFmpeg filter chain and what the bot says when it is applied."""
+    """An FFmpeg filter chain, what the bot says, and how fast it plays."""
     filter: str
     label: str
+    # How fast this filter consumes audio. Only the pitch effects move it, and
+    # synced lyrics need it to know where the song really is — wall-clock time
+    # is a quarter short at 1.25x. Measured against FFmpeg in the tests.
+    rate: float = 1.0
 
 
 # The single source of truth for effects: the filter, the reply, and — via the
@@ -35,9 +39,9 @@ EFFECTS: dict[str, Effect] = {
     # the speed factor becomes 48000*N/<source rate> and differs per track. A
     # 44.1 kHz upload ran at 1.36x and a 22 kHz one at 2.72x, not 1.25x.
     "nightcore": Effect("aresample=48000,asetrate=48000*1.25,aresample=48000",
-                        "Nightcore effect applied 🌙✨"),
+                        "Nightcore effect applied 🌙✨", rate=1.25),
     "vaporwave": Effect("aresample=48000,asetrate=48000*0.8,aresample=48000",
-                        "Vaporwave effect applied 🌊🎶"),
+                        "Vaporwave effect applied 🌊🎶", rate=0.8),
     "treble":    Effect("equalizer=f=8000:width_type=o:width=2:g=5", "Treble boost applied 🎵"),
     "echo":      Effect("aecho=0.8:0.88:60:0.4", "Echo effect applied 🔔"),
     "karaoke":   Effect("pan=stereo|c0=c0-c1|c1=c1-c0", "Karaoke mode on 🎤"),
@@ -63,14 +67,15 @@ class Effects(commands.Cog, name="🎛️ Audio Effects"):
         self._last_change[ctx.guild.id] = now
         return False
 
-    async def _switch_to(self, ctx, name: str | None, filter_str: str, label: str) -> None:
+    async def _switch_to(self, ctx, name: str | None, filter_str: str, label: str,
+                         rate: float = 1.0) -> None:
         """Throttle, apply, and report — the whole path every effect command takes."""
         if self._throttled(ctx):
             return await ctx.send(embed=error_embed(
                 f"Easy — wait {_EFFECT_COOLDOWN:.0f}s between effect changes."
             ))
         player = players.get(ctx.guild.id)
-        if player and player.apply_effect(name, filter_str):
+        if player and player.apply_effect(name, filter_str, rate):
             await ctx.send(embed=success_embed(label))
         else:
             await ctx.send(embed=error_embed("Nothing is playing."))
@@ -79,8 +84,9 @@ class Effects(commands.Cog, name="🎛️ Audio Effects"):
                       help="Apply an audio effect. Use !effects to see them all.")
     @same_voice_channel()
     async def apply_effect(self, ctx):
-        effect = EFFECTS[ctx.invoked_with.lower()]
-        await self._switch_to(ctx, ctx.invoked_with.lower(), effect.filter, effect.label)
+        name = ctx.invoked_with.lower()
+        effect = EFFECTS[name]
+        await self._switch_to(ctx, name, effect.filter, effect.label, effect.rate)
 
     @commands.command(name="reset", aliases=["fxreset", "noeffect"])
     @same_voice_channel()

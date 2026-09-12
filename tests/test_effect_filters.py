@@ -144,3 +144,17 @@ def test_seeking_and_an_effect_apply_together(tone_file):
             handle, ffmpeg_filter=EFFECTS["bassboost"].filter, seek_seconds=20,
         )
         assert played_seconds(source) == pytest.approx(10.0, abs=0.3)
+
+
+# -- the declared rate must match the filter ----------------------------
+
+@pytest.mark.parametrize("name", sorted(EFFECTS))
+def test_the_declared_rate_is_what_ffmpeg_actually_does(name):
+    """
+    `Effect.rate` is how synced lyrics know where the song is: at 1.25x the audio
+    runs a quarter ahead of the wall clock. A rate that disagrees with its filter
+    would drift the lyrics further out with every passing minute, so it is
+    measured against real FFmpeg rather than taken on trust.
+    """
+    effect = EFFECTS[name]
+    assert speed_factor(effect.filter, 44100) == pytest.approx(effect.rate, rel=0.05)
