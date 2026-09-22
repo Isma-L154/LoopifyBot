@@ -217,3 +217,46 @@ def test_no_music_command_keeps_a_private_error_handler():
         c.qualified_name for c in Music.__cog_commands__ if c.has_error_handler()
     ]
     assert with_handlers == []
+
+
+# -- commands sent in a DM ---------------------------------------------
+#
+# Every command acts on a guild. Before the global check, `!play` in a DM died
+# on `ctx.author.voice` and got the generic "something went wrong".
+
+async def test_a_dm_is_refused_by_the_global_check():
+    from utils.context import guild_only
+
+    dm = MagicMock(guild=None)
+    with pytest.raises(commands.NoPrivateMessage):
+        await guild_only(dm)
+
+
+async def test_a_guild_message_passes_the_global_check():
+    from utils.context import guild_only
+
+    assert await guild_only(MagicMock(guild=MagicMock())) is True
+
+
+async def test_a_dm_is_told_to_use_a_server(ctx):
+    await errors.handle(ctx, commands.NoPrivateMessage())
+    assert "server" in sent_text(ctx)
+
+
+def test_the_global_check_is_registered_on_the_bot(monkeypatch):
+    """Without registration the check is dead code, and DMs reach the commands."""
+    import importlib
+    import sys
+
+    import config
+    from utils.context import guild_only
+
+    # Importing main runs its startup; keep it offline and credential-free.
+    monkeypatch.setattr(config, "DISCORD_TOKEN", "not-a-real-token")
+    monkeypatch.setattr(config, "log_runtime", lambda: None)
+    sys.modules.pop("main", None)
+    main = importlib.import_module("main")
+    try:
+        assert guild_only in main.bot._checks
+    finally:
+        sys.modules.pop("main", None)

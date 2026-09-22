@@ -17,6 +17,7 @@ import asyncio
 import contextlib
 import logging
 import signal
+from typing import Any, Awaitable, Callable
 
 import aiohttp
 import discord
@@ -47,7 +48,7 @@ def is_transient(error: BaseException) -> bool:
                               asyncio.TimeoutError, discord.GatewayNotFound))
 
 
-async def _discard_session(http) -> None:
+async def _discard_session(http: discord.http.HTTPClient) -> None:
     """
     Release the aiohttp session a failed login left behind.
 
@@ -67,9 +68,10 @@ async def _discard_session(http) -> None:
     http.connector = discord.utils.MISSING
 
 
-async def login_with_retry(bot, token: str, *,
+async def login_with_retry(bot: discord.Client, token: str, *,
                            delays: tuple[float, ...] = LOGIN_RETRY_DELAYS,
-                           sleep=asyncio.sleep) -> None:
+                           sleep: Callable[[float], Awaitable[Any]] = asyncio.sleep,
+                           ) -> None:
     """
     Log ``bot`` in, retrying while the failure looks like weather.
 
@@ -89,7 +91,7 @@ async def login_with_retry(bot, token: str, *,
             await sleep(delay)
 
 
-async def start(bot, token: str, **retry_options) -> None:
+async def start(bot: discord.Client, token: str, **retry_options: Any) -> None:
     """
     Bring the bot online: a retried login, then discord.py's own gateway loop.
 
@@ -109,7 +111,8 @@ VOICE_DISCONNECT_TIMEOUT = 5.0
 _STOP_SIGNALS = ("SIGINT", "SIGTERM")
 
 
-async def leave_voice(bot, *, timeout: float = VOICE_DISCONNECT_TIMEOUT) -> None:
+async def leave_voice(bot: discord.Client, *,
+                      timeout: float = VOICE_DISCONNECT_TIMEOUT) -> None:
     """
     Leave every voice channel, giving each one a bounded chance to confirm.
 
@@ -144,10 +147,10 @@ def _watch_for_stop_signals(stop: asyncio.Event) -> None:
             pass
 
 
-async def serve(bot, token: str, *,
+async def serve(bot: discord.Client, token: str, *,
                 stop: asyncio.Event | None = None,
                 voice_timeout: float = VOICE_DISCONNECT_TIMEOUT,
-                **retry_options) -> None:
+                **retry_options: Any) -> None:
     """
     Run the bot until it is asked to stop, then release voice within a bound.
 

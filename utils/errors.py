@@ -21,7 +21,7 @@ from utils.embeds import error_embed
 log = logging.getLogger("loopify.errors")
 
 
-def usage(ctx) -> str:
+def usage(ctx: commands.Context) -> str:
     """
     How the command should have been invoked, e.g. ``!move <from_pos> <to_pos>``.
 
@@ -46,13 +46,15 @@ def _input_detail(error: commands.UserInputError) -> str:
     return "I couldn't make sense of that."
 
 
-async def handle(ctx, error: Exception) -> None:
+async def handle(ctx: commands.Context, error: Exception) -> None:
     """Reply to the user, or log, depending on what went wrong."""
     # discord.py wraps exceptions raised inside a command body.
     error = getattr(error, "original", error)
 
     if isinstance(error, commands.CommandNotFound):
         return
+    if isinstance(error, commands.NoPrivateMessage):
+        return await _reply(ctx, "I only take commands in a server, not in DMs.")
     if isinstance(error, commands.CheckFailure):
         return                      # the check already sent its own message
     if ctx.command is not None and ctx.command.has_error_handler():
@@ -77,7 +79,7 @@ async def handle(ctx, error: Exception) -> None:
     await _reply(ctx, "Something went wrong on my side. It has been logged.")
 
 
-async def _reply(ctx, message: str) -> None:
+async def _reply(ctx: commands.Context, message: str) -> None:
     try:
         await ctx.send(embed=error_embed(message))
     except discord.HTTPException as e:

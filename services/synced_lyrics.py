@@ -12,7 +12,7 @@ import logging
 import re
 from bisect import bisect_right
 from dataclasses import dataclass
-from typing import Optional
+from typing import Any, Optional
 
 import aiohttp
 
@@ -129,7 +129,7 @@ class Lyrics:
         return bool(self.lines)
 
 
-async def fetch(session, title: str, artist: str,
+async def fetch(session: aiohttp.ClientSession, title: str, artist: str,
                 duration: Optional[float]) -> Optional[Lyrics]:
     """
     Look a track up on LRCLIB. Returns None when there is nothing to show.
@@ -138,7 +138,7 @@ async def fetch(session, title: str, artist: str,
     here raises: LRCLIB being unreachable, slow or wrong is not a reason to
     interrupt playback, so every failure becomes None and a log line.
     """
-    params = {"track_name": title, "artist_name": artist}
+    params: dict[str, str | int] = {"track_name": title, "artist_name": artist}
     if duration:
         params["duration"] = int(duration)
 
@@ -159,7 +159,7 @@ async def fetch(session, title: str, artist: str,
     return _build(payload, title, artist)
 
 
-def _build(payload: dict, title: str, artist: str) -> Optional[Lyrics]:
+def _build(payload: dict[str, Any], title: str, artist: str) -> Optional[Lyrics]:
     """Turn a payload into Lyrics, or None when it holds nothing worth showing."""
     lines = parse_lrc(payload.get("syncedLyrics") or "")
     plain = (payload.get("plainLyrics") or "").strip()

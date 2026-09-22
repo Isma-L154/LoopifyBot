@@ -12,11 +12,10 @@ Design goals:
   signature solving and throttling — see the note above those functions.
 - Non-blocking: every yt-dlp metadata call runs in a thread executor.
 
-Track dict shape::
-
-    {title, url, duration, thumbnail, uploader, source, query}
+What every lookup returns, and what the queue holds, is a :class:`Track`.
 """
 
+import io
 import os
 import sys
 import time
@@ -27,7 +26,7 @@ import subprocess
 import tempfile
 import asyncio
 import logging
-from typing import Optional
+from typing import IO, Any, NotRequired, Optional, TypedDict, cast
 from urllib.parse import urlsplit
 
 import discord
@@ -36,6 +35,21 @@ import yt_dlp
 from config import COOKIES_PATH
 
 log = logging.getLogger("loopify.media")
+
+
+class Track(TypedDict):
+    """One playable item, as the queue, the player and the embeds pass it."""
+
+    title: str
+    url: Optional[str]          # None: streamed by searching `query` or `title`
+    duration: Optional[float]   # seconds; None for a live stream
+    thumbnail: Optional[str]
+    uploader: Optional[str]
+    source: str                 # the yt-dlp extractor, lowercased
+    query: str                  # what was searched for; "" for a playlist entry
+    requester: NotRequired[discord.abc.User]   # set when a command queues it
+    error: NotRequired[str]     # set when it failed to load; see classify_error
+
 
 # YouTube player clients, tried in order. ONE definition — both the metadata
 # options below and the streaming subprocess derive from this, because two
@@ -60,7 +74,7 @@ log = logging.getLogger("loopify.media")
 _PLAYER_CLIENTS = ("web_embedded", "mweb", "tv_embedded")
 
 # Base yt-dlp config shared by every call.
-YTDL_OPTIONS = {
+YTDL_OPTIONS: dict[str, Any] = {
     "format": "bestaudio/best",
     "noplaylist": True,
     "quiet": True,
@@ -87,7 +101,7 @@ _SEARCH_PREFIXES = {
 }
 
 
-def _build_track(info: dict, *, query: str = "") -> dict:
+def _build_track(info: dict[str, Any], *, query: str = "") -> Track:
     """Convert a yt-dlp info dict into our internal track dict."""
     return {
         "title":     info.get("title") or "Unknown Title",
@@ -100,14 +114,15 @@ def _build_track(info: dict, *, query: str = "") -> dict:
     }
 
 
-def _first_thumb(info: dict) -> Optional[str]:
+def _first_thumb(info: dict[str, Any]) -> Optional[str]:
     thumbs = info.get("thumbnails") or []
     return thumbs[-1]["url"] if thumbs else None
 
 
-def _run(opts: dict, target: str, *, loop):
+def _run(opts: dict[str, Any], target: str, *,
+         loop: asyncio.AbstractEventLoop) -> asyncio.Future[Any]:
     """Run yt-dlp's blocking extract_info in a thread executor."""
-    def _extract():
+    def _extract() -> Any:
         with yt_dlp.YoutubeDL(opts) as ydl:
             return ydl.extract_info(target, download=False)
     return loop.run_in_executor(None, _extract)
@@ -131,7 +146,8 @@ def _search_target(query: str) -> tuple[str, bool]:
 
 # ── Public API ────────────────────────────────────────────────────────
 
-async def search(query: str, *, loop=None) -> Optional[dict]:
+async def search(query: str, *,
+                 loop: Optional[asyncio.AbstractEventLoop] = None) -> Optional[Track]:
     """Resolve a single track from a search term or any supported URL."""
     loop = loop or asyncio.get_event_loop()
     target, flat_ok = _search_target(query)
@@ -145,7 +161,8 @@ async def search(query: str, *, loop=None) -> Optional[dict]:
         return None
 
 
-async def search_many(query: str, limit: int = 5, *, loop=None) -> list[dict]:
+async def search_many(query: str, limit: int = 5, *,
+                      loop: Optional[asyncio.AbstractEventLoop] = None) -> list[Track]:
     """Return up to ``limit`` YouTube search results (metadata only)."""
     loop = loop or asyncio.get_event_loop()
     opts = {**YTDL_OPTIONS, "extract_flat": True}
@@ -158,7 +175,8 @@ async def search_many(query: str, limit: int = 5, *, loop=None) -> list[dict]:
         return []
 
 
-async def get_playlist(url: str, *, loop=None) -> list[dict]:
+async def get_playlist(url: str, *,
+                       loop: Optional[asyncio.AbstractEventLoop] = None) -> list[Track]:
     """Extract every track from a playlist/set/album URL (metadata only)."""
     loop = loop or asyncio.get_event_loop()
     opts = {**YTDL_OPTIONS, "noplaylist": False, "extract_flat": True}
@@ -171,7 +189,8 @@ async def get_playlist(url: str, *, loop=None) -> list[dict]:
         return []
 
 
-async def related(track: dict, *, loop=None) -> Optional[dict]:
+async def related(track: Track, *,
+                  loop: Optional[asyncio.AbstractEventLoop] = None) -> Optional[Track]:
     """Approximate a 'related' track for autoplay via a themed search."""
     seed = track.get("uploader") or track.get("title") or ""
     if not seed:
@@ -202,12 +221,12 @@ async def is_public_url(url: str) -> bool:
         infos = await asyncio.get_running_loop().getaddrinfo(host, None)
     except OSError:
         return False
-    addresses = {info[4][0].split("%", 1)[0] for info in infos}   # drop IPv6 scope
+    addresses = {str(info[4][0]).split("%", 1)[0] for info in infos}   # drop IPv6 scope
     return bool(addresses) and all(
         ipaddress.ip_address(address).is_global for address in addresses)
 
 
-def _first_entry(info):
+def _first_entry(info: Optional[dict[str, Any]]) -> Optional[dict[str, Any]]:
     """Unwrap the first playable entry from a search/playlist result."""
     if info and "entries" in info:
         entries = [e for e in info["entries"] if e]
@@ -225,10 +244,11 @@ def _first_entry(info):
 #
 # The pipe applies natural backpressure, so memory stays bounded on small hosts.
 
-def _stream_target(track: dict) -> str:
+def _stream_target(track: Track) -> str:
     """The yt-dlp target for streaming a track: its URL, or a search query."""
-    if track.get("url"):
-        return track["url"]
+    url = track.get("url")
+    if url:
+        return url
     query = track.get("query") or track.get("title", "")
     target, _ = _search_target(query)
     return target
@@ -246,7 +266,7 @@ _BOT_CHECK_MARKERS = ("not a bot", "sign in to confirm")
 _REAP_TIMEOUT = 5.0
 
 
-def _close_quietly(handle) -> None:
+def _close_quietly(handle: Optional[IO[bytes]]) -> None:
     """Close a pipe/file, ignoring anything that goes wrong during teardown."""
     if handle is None:
         return
@@ -281,7 +301,7 @@ class AudioStream:
 
     __slots__ = ("_proc", "_errfile", "_error", "_closed")
 
-    def __init__(self, proc: subprocess.Popen, errfile) -> None:
+    def __init__(self, proc: subprocess.Popen[bytes], errfile: IO[bytes]) -> None:
         self._proc = proc
         self._errfile = errfile
         self._error: Optional[str] = None
@@ -304,7 +324,7 @@ class AudioStream:
         return cls(proc, errfile)
 
     @property
-    def stdout(self):
+    def stdout(self) -> Optional[IO[bytes]]:
         """The audio pipe, or ``None`` once the stream has been closed."""
         return None if self._closed else self._proc.stdout
 
@@ -353,7 +373,7 @@ class AudioStream:
             return ""
 
 
-def spawn_stream(track: dict) -> AudioStream:
+def spawn_stream(track: Track) -> AudioStream:
     """Start streaming a track's best audio through yt-dlp."""
     cmd = [
         sys.executable, "-m", "yt_dlp",
@@ -406,10 +426,11 @@ class BufferedAudioSource(discord.AudioSource):
     exists to provide.
     """
 
-    def __init__(self, source, *, seconds: float = READ_AHEAD_SECONDS) -> None:
+    def __init__(self, source: discord.AudioSource, *,
+                 seconds: float = READ_AHEAD_SECONDS) -> None:
         self._source = source
         self.capacity_frames = max(1, int(seconds / FRAME_SECONDS))
-        self._queue: "queue.Queue" = queue.Queue(maxsize=self.capacity_frames)
+        self._queue: queue.Queue[bytes] = queue.Queue(maxsize=self.capacity_frames)
         self._stop = threading.Event()
         self._thread = threading.Thread(
             target=self._fill, name="loopify-readahead", daemon=True,
@@ -501,8 +522,9 @@ class BufferedAudioSource(discord.AudioSource):
             pass
 
 
-def make_pipe_source(stdin, *, volume: float = 0.5, ffmpeg_filter: str = "",
-                     seek_seconds: float = 0.0):
+def make_pipe_source(stdin: IO[bytes], *, volume: float = 0.5,
+                     ffmpeg_filter: str = "", seek_seconds: float = 0.0,
+                     ) -> discord.PCMVolumeTransformer[BufferedAudioSource]:
     """
     Build a ``discord.PCMVolumeTransformer`` that reads audio from a pipe.
 
@@ -515,7 +537,10 @@ def make_pipe_source(stdin, *, volume: float = 0.5, ffmpeg_filter: str = "",
     options = f"-vn -af {ffmpeg_filter}" if ffmpeg_filter else "-vn"
     before = f"-ss {seek_seconds:.3f}" if seek_seconds > 0 else None
     source = discord.FFmpegPCMAudio(
-        stdin, pipe=True, before_options=before, options=options,
+        # Typed as IO[bytes] by typeshed, but Popen with a buffer size hands
+        # back a BufferedReader, which is what discord.py asks for.
+        cast(io.BufferedIOBase, stdin),
+        pipe=True, before_options=before, options=options,
     )
     # Order matters. The read-ahead goes around FFmpeg, which is what stalls,
     # and the volume transformer stays outermost so `MusicPlayer.set_volume`
@@ -526,7 +551,7 @@ def make_pipe_source(stdin, *, volume: float = 0.5, ffmpeg_filter: str = "",
     )
 
 
-def prime_source(source) -> bool:
+def prime_source(source: discord.AudioSource) -> bool:
     """
     Wait for a source from :func:`make_pipe_source` to have audio ready.
 

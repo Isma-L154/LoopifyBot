@@ -7,7 +7,7 @@ Required .env variable: ``GENIUS_TOKEN`` (see :mod:`config`).
 import asyncio
 import logging
 from functools import lru_cache
-from typing import Optional
+from typing import Any, Optional
 
 import lyricsgenius
 
@@ -41,7 +41,7 @@ def _client() -> lyricsgenius.Genius:
     )
 
 
-async def fetch(title: str, artist: str = "") -> Optional[dict]:
+async def fetch(title: str, artist: str = "") -> Optional[dict[str, str]]:
     """
     Search Genius for lyrics.
 
@@ -60,7 +60,7 @@ async def fetch(title: str, artist: str = "") -> Optional[dict]:
     # the gateway is up raises, and this never needs a different loop anyway.
     loop = asyncio.get_running_loop()
 
-    def _search():
+    def _search() -> Any:
         client = _client()
         # An empty artist matches worse than no artist at all.
         return client.search_song(title, artist) if artist else client.search_song(title)

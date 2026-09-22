@@ -65,7 +65,7 @@ def _ffmpeg_version() -> str:
     return parts[2] if len(parts) > 2 and parts[1] == "version" else "unknown"
 
 
-def runtime_versions() -> dict:
+def runtime_versions() -> dict[str, str]:
     """
     What this instance is actually running.
 

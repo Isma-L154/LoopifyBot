@@ -1,21 +1,23 @@
 import asyncio
 import logging
 import time
-from typing import Awaitable, Callable, Optional
+from typing import Awaitable, Callable, Optional, Sequence
 
 import aiohttp
 import discord
 from discord.ext import commands
 
 from services import lyrics_api, synced_lyrics
+from services.media import Track
 # Deliberately not `from ... import Lyrics`: the cog class below is called
 # Lyrics too, and importing the bare name let it shadow the dataclass. The
 # Genius fallback then built a Cog instead of a result and raised TypeError,
 # which the command reported as nothing at all.
-from services.synced_lyrics import index_at, search_terms
+from services.synced_lyrics import Line, index_at, search_terms
+from utils.context import GuildContext
 from utils.embeds import (error_embed, info_embed, lyrics_embed, lyrics_pages,
                           synced_lyrics_embed)
-from utils.player import players
+from utils.player import MusicPlayer, players
 
 LyricsResult = synced_lyrics.Lyrics
 
@@ -34,7 +36,7 @@ MIN_EDIT_INTERVAL = 1.5
 MAX_SLEEP = 2.0
 MIN_SLEEP = 0.25
 
-Loader = Callable[[dict], Awaitable[Optional[LyricsResult]]]
+Loader = Callable[[Track], Awaitable[Optional[LyricsResult]]]
 
 
 class LyricsFollower:
@@ -46,8 +48,10 @@ class LyricsFollower:
     simply as a different position on the next wakeup.
     """
 
-    def __init__(self, message, player, load: Loader, *,
-                 sleep=asyncio.sleep, now=time.monotonic) -> None:
+    def __init__(self, message: discord.Message, player: MusicPlayer,
+                 load: Loader, *,
+                 sleep: Callable[[float], Awaitable[None]] = asyncio.sleep,
+                 now: Callable[[], float] = time.monotonic) -> None:
         self.message = message
         self.player = player
         self._load = load
@@ -60,7 +64,7 @@ class LyricsFollower:
 
     async def run(self) -> None:
         """Follow the music until the song, the player or the message runs out."""
-        track: Optional[dict] = None
+        track: Optional[Track] = None
         lyrics: Optional[LyricsResult] = None
         shown: Optional[int] = None
         last_edit = float("-inf")
@@ -87,12 +91,12 @@ class LyricsFollower:
             await self._sleep(self._until_next_line(lyrics.lines, index, position))
 
     async def _show(self, lyrics: LyricsResult, index: int, position: float,
-                    track: Optional[dict]) -> bool:
+                    track: Optional[Track]) -> bool:
         """Redraw the message. False means it is gone and we should stop."""
         try:
             await self.message.edit(embed=synced_lyrics_embed(
                 lyrics.title, lyrics.artist, lyrics.lines, index,
-                position, (track or {}).get("duration"),
+                position, track.get("duration") if track else None,
             ))
             return True
         except (discord.NotFound, discord.Forbidden) as e:
@@ -102,7 +106,8 @@ class LyricsFollower:
             log.warning("Could not update lyrics: %s", e)
             return True          # a rate limit or a blip, not a reason to stop
 
-    def _until_next_line(self, lines, index: int, position: float) -> float:
+    def _until_next_line(self, lines: Sequence[Line], index: int,
+                         position: float) -> float:
         """
         How long until the next line, in real seconds.
 
@@ -139,11 +144,13 @@ class LyricsPages(discord.ui.View):
         await interaction.response.edit_message(embed=self.embed(), view=self)
 
     @discord.ui.button(emoji="◀", style=discord.ButtonStyle.secondary)
-    async def previous(self, interaction: discord.Interaction, _button) -> None:
+    async def previous(self, interaction: discord.Interaction,
+                       _button: "discord.ui.Button[LyricsPages]") -> None:
         await self._turn(interaction, -1)
 
     @discord.ui.button(emoji="▶", style=discord.ButtonStyle.secondary)
-    async def next(self, interaction: discord.Interaction, _button) -> None:
+    async def next(self, interaction: discord.Interaction,
+                   _button: "discord.ui.Button[LyricsPages]") -> None:
         await self._turn(interaction, 1)
 
 
@@ -157,13 +164,13 @@ class FollowControls(discord.ui.View):
     @discord.ui.button(label="Stop", emoji="⏹",
                        style=discord.ButtonStyle.secondary)
     async def stop_following(self, interaction: discord.Interaction,
-                             _button) -> None:
+                             _button: "discord.ui.Button[FollowControls]") -> None:
         self._on_stop()
         await interaction.response.edit_message(view=None)
 
 
 class Lyrics(commands.Cog, name="\U0001f3a4 Lyrics"):
-    def __init__(self, bot):
+    def __init__(self, bot: commands.Bot) -> None:
         self.bot = bot
         self._session: Optional[aiohttp.ClientSession] = None
         self._following: dict[int, tuple[LyricsFollower, asyncio.Task]] = {}
@@ -191,6 +198,8 @@ class Lyrics(commands.Cog, name="\U0001f3a4 Lyrics"):
     async def _find(self, title: str, artist: str,
                     duration: Optional[float]) -> Optional[LyricsResult]:
         """LRCLIB first, since it is the only source with timings, then Genius."""
+        if self._session is None:
+            raise RuntimeError("the Lyrics cog was used before cog_load")
         found = await synced_lyrics.fetch(self._session, title, artist, duration)
         if found is not None:
             return found
@@ -214,7 +223,7 @@ class Lyrics(commands.Cog, name="\U0001f3a4 Lyrics"):
             found = await self._find(artist, title, None)
         return found
 
-    async def _for_track(self, track: dict) -> Optional[LyricsResult]:
+    async def _for_track(self, track: Track) -> Optional[LyricsResult]:
         """Look a playing track up, with its title tidied into search terms."""
         title, artist = search_terms(track.get("title") or "",
                                      track.get("uploader") or "")
@@ -232,14 +241,16 @@ class Lyrics(commands.Cog, name="\U0001f3a4 Lyrics"):
         if not task.done():
             task.cancel()
 
-    async def _follow(self, ctx, player, lyrics: LyricsResult) -> None:
+    async def _follow(self, ctx: GuildContext, player: MusicPlayer,
+                      lyrics: LyricsResult) -> None:
         """Post the live message and start keeping it up to date."""
         self.stop_following(ctx.guild.id)      # one per guild; the newest wins
         index = index_at(lyrics.lines, player.position)
         message = await ctx.send(
             embed=synced_lyrics_embed(
                 lyrics.title, lyrics.artist, lyrics.lines, index,
-                player.position, (player.current or {}).get("duration")),
+                player.position,
+                player.current.get("duration") if player.current else None),
             view=FollowControls(lambda: self.stop_following(ctx.guild.id)),
         )
         follower = LyricsFollower(message, player, self._for_track)
@@ -259,7 +270,8 @@ class Lyrics(commands.Cog, name="\U0001f3a4 Lyrics"):
     # -- The command ---------------------------------------------------
 
     @commands.command(aliases=["ly"])
-    async def lyrics(self, ctx, *, query: str = None):
+    async def lyrics(self, ctx: GuildContext, *,
+                     query: Optional[str] = None) -> None:
         """Follow the lyrics of the current song, or look a song up."""
         async with ctx.typing():
             player = players.get(ctx.guild.id)
@@ -270,20 +282,23 @@ class Lyrics(commands.Cog, name="\U0001f3a4 Lyrics"):
                 title = player.current.get("title", "")
                 found = await self._for_track(player.current)
             else:
-                return await ctx.send(embed=error_embed(
+                await ctx.send(embed=error_embed(
                     f"Nothing is playing. Provide a song name: "
                     f"`{ctx.clean_prefix}lyrics <title>`"
                 ))
+                return
 
             if found is None:
-                return await ctx.send(embed=error_embed(
+                await ctx.send(embed=error_embed(
                     f"Couldn't find lyrics for **{title}**."
                 ))
+                return
             if found.instrumental:
-                return await ctx.send(embed=info_embed(
+                await ctx.send(embed=info_embed(
                     "\U0001f3b5 Instrumental",
                     f"**{found.title}** has no lyrics to show."
                 ))
+                return
 
             # Only the playing track can be followed: a lyric needs a clock, and
             # a search result has none.
@@ -292,9 +307,11 @@ class Lyrics(commands.Cog, name="\U0001f3a4 Lyrics"):
 
             note = "" if query else "not synced - showing the full lyrics"
             view = LyricsPages(found.title, found.artist, found.plain, note)
-            await ctx.send(embed=view.embed(),
-                           view=view if view.total > 1 else None)
+            if view.total > 1:
+                await ctx.send(embed=view.embed(), view=view)
+            else:
+                await ctx.send(embed=view.embed())
 
 
-async def setup(bot):
+async def setup(bot: commands.Bot) -> None:
     await bot.add_cog(Lyrics(bot))

@@ -302,3 +302,12 @@ def test_embeds_name_commands_with_the_configured_prefix(monkeypatch):
     assert "?play sc: Song" in embeds.load_error_embed(track).description
     footer = embeds.now_playing_embed(track, MagicMock()).footer.text
     assert "?queue" in footer and "!" not in footer
+
+
+async def test_play_copes_with_the_author_leaving_voice_mid_command(music_cog, ctx):
+    """@user_in_voice passed, then the author left while the link resolved."""
+    ctx.author.voice = None
+    with patch("cogs.music.media.search", new=AsyncMock()) as search:
+        await Music.play.callback(music_cog, ctx, query="bohemian rhapsody")
+    assert "voice channel" in sent_text(ctx)
+    search.assert_not_awaited()

@@ -1,9 +1,11 @@
 from datetime import timedelta
-from typing import Optional
+from typing import Optional, Sequence
 
 import discord
 
 from config import COMMAND_PREFIX
+from services.media import Track
+from services.synced_lyrics import Line
 
 GREEN = 0x1DB954
 BLURPLE = 0x5865F2
@@ -11,18 +13,18 @@ RED = 0xFF4444
 GOLD = 0xFFD700
 
 
-def format_duration(seconds: Optional[int]) -> str:
+def format_duration(seconds: Optional[float]) -> str:
     if not seconds:
         return "🔴 LIVE"
     return str(timedelta(seconds=seconds))
 
 
-def _linked_title(track: dict) -> str:
+def _linked_title(track: Track) -> str:
     url = track.get("url")
     return f"[{track['title']}]({url})" if url else track["title"]
 
 
-def now_playing_embed(track: dict, requester: discord.abc.User,
+def now_playing_embed(track: Track, requester: discord.abc.User,
                       loop_mode: str = "off") -> discord.Embed:
     embed = discord.Embed(
         title="🎵 Now Playing",
@@ -40,7 +42,7 @@ def now_playing_embed(track: dict, requester: discord.abc.User,
     return embed
 
 
-def added_embed(track: dict) -> discord.Embed:
+def added_embed(track: Track) -> discord.Embed:
     embed = discord.Embed(
         description=f"➕ Added to queue: **{_linked_title(track)}**", color=BLURPLE)
     if track.get("thumbnail"):
@@ -48,7 +50,7 @@ def added_embed(track: dict) -> discord.Embed:
     return embed
 
 
-def queue_embed(queue: list, current: Optional[dict], page: int = 1,
+def queue_embed(queue: list[Track], current: Optional[Track], page: int = 1,
                 per_page: int = 10) -> discord.Embed:
     embed = discord.Embed(title="📋 Music Queue", color=BLURPLE)
 
@@ -76,7 +78,7 @@ def queue_embed(queue: list, current: Optional[dict], page: int = 1,
     return embed
 
 
-def load_error_embed(track: dict) -> discord.Embed:
+def load_error_embed(track: Track) -> discord.Embed:
     """Explain why a track produced no audio, per ``AudioStream.classify_error``."""
     title = track.get("title", "track")
     if track.get("error") == "blocked":
@@ -109,7 +111,8 @@ def clock(seconds: float) -> str:
     return f"{seconds // 60}:{seconds % 60:02d}"
 
 
-def lyrics_window(lines, index: int, context: int = CONTEXT_LINES) -> str:
+def lyrics_window(lines: Sequence[Line], index: int,
+                  context: int = CONTEXT_LINES) -> str:
     """
     The line playing now, with a little of what came before and what is next.
 
@@ -154,7 +157,7 @@ def lyrics_pages(text: str, limit: int = EMBED_LIMIT) -> list[str]:
     return pages
 
 
-def synced_lyrics_embed(title: str, artist: str, lines, index: int,
+def synced_lyrics_embed(title: str, artist: str, lines: Sequence[Line], index: int,
                         position: float, duration: Optional[float]) -> discord.Embed:
     """The live view: a window on the lyrics plus where the song is."""
     embed = discord.Embed(
