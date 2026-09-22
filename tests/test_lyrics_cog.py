@@ -24,7 +24,9 @@ GENIUS_HIT = {
 
 @pytest.fixture
 def cog():
-    return LyricsCog(MagicMock())
+    cog = LyricsCog(MagicMock())
+    cog._session = MagicMock()      # what cog_load opens; every lookup is mocked
+    return cog
 
 
 @pytest.fixture

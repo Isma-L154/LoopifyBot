@@ -86,7 +86,7 @@ def build(player, script, *, lyrics=SONG, message=None):
 
 async def test_it_edits_when_the_line_changes():
     player = FakePlayer(current={"t": 1}, position=0.0)
-    follower, conductor, _ = build(player, [15.0, 25.0])
+    follower, _, _ = build(player, [15.0, 25.0])
 
     await follower.run()
 

@@ -9,9 +9,7 @@ conditions that plague the naive "chained ``after`` callback" approach, where
 ``stop()`` could fire a callback that advanced the queue at the same time a new
 source was being played.
 
-Track dict shape (see ``services.media._build_track``)::
-
-    {title, url, duration, thumbnail, uploader, source, query}
+Tracks are :class:`services.media.Track`.
 """
 
 import time
@@ -19,11 +17,12 @@ import random
 import asyncio
 import logging
 from collections import deque
-from typing import Callable, Optional
+from typing import Callable, Optional, cast
 
 import discord
 
 from services import media
+from services.media import Track
 from utils.announcer import ChannelAnnouncer
 
 log = logging.getLogger("loopify.player")
@@ -45,7 +44,7 @@ class MusicPlayer:
 
     def __init__(self, bot: discord.Client, guild: discord.Guild,
                  text_channel: discord.abc.Messageable, *,
-                 on_destroy: Optional[Callable[[int], None]] = None):
+                 on_destroy: Optional[Callable[[int], None]] = None) -> None:
         self.bot = bot
         self.guild = guild
         self.announcer = ChannelAnnouncer(text_channel)
@@ -54,9 +53,9 @@ class MusicPlayer:
         # and a test can build one without touching process-wide state.
         self._on_destroy = on_destroy
 
-        self.queue: deque[dict] = deque()
-        self.history: list[dict] = []
-        self.current: Optional[dict] = None
+        self.queue: deque[Track] = deque()
+        self.history: list[Track] = []
+        self.current: Optional[Track] = None
 
         self.loop_mode: str = "off"      # off | track | queue
         self.autoplay: bool = False
@@ -74,8 +73,8 @@ class MusicPlayer:
         self._seek_base: float = 0.0              # offset the live stream started at
         self._stream: Optional[media.AudioStream] = None   # active yt-dlp stream
         # Next track's stream, fetched while the current one plays.
-        self._prefetch: Optional[tuple[dict, media.AudioStream]] = None
-        self._prefetch_task: Optional[asyncio.Task] = None
+        self._prefetch: Optional[tuple[Track, media.AudioStream]] = None
+        self._prefetch_task: Optional[asyncio.Task[None]] = None
 
         # Signalling between commands and the playback loop.
         self._next = asyncio.Event()     # set when the current source finishes
@@ -88,7 +87,7 @@ class MusicPlayer:
 
     # ── Queue mutation (called by commands) ───────────────────────────
 
-    def add(self, track: dict) -> bool:
+    def add(self, track: Track) -> bool:
         """Append a track. Returns False if the queue is at its hard cap."""
         if len(self.queue) >= MAX_QUEUE:
             return False
@@ -96,7 +95,7 @@ class MusicPlayer:
         self._added.set()
         return True
 
-    def add_many(self, tracks: list[dict]) -> int:
+    def add_many(self, tracks: list[Track]) -> int:
         """Append up to the queue cap. Returns how many were actually added."""
         room = MAX_QUEUE - len(self.queue)
         accepted = tracks[:max(0, room)]
@@ -105,7 +104,7 @@ class MusicPlayer:
             self._added.set()
         return len(accepted)
 
-    def remove(self, index: int) -> Optional[dict]:
+    def remove(self, index: int) -> Optional[Track]:
         """Remove a 1-based queue position. Returns the removed track or None."""
         if not (1 <= index <= len(self.queue)):
             return None
@@ -134,12 +133,14 @@ class MusicPlayer:
     def is_empty(self) -> bool:
         return not self.queue
 
-    def to_list(self) -> list[dict]:
+    def to_list(self) -> list[Track]:
         return list(self.queue)
 
     @property
     def voice(self) -> Optional[discord.VoiceClient]:
-        return self.guild.voice_client
+        # Typed as the VoiceProtocol base; this bot only ever connects with
+        # discord.py's own VoiceClient.
+        return cast(Optional[discord.VoiceClient], self.guild.voice_client)
 
     @property
     def text_channel(self) -> discord.abc.Messageable:
@@ -230,7 +231,7 @@ class MusicPlayer:
 
     # ── Prefetch ──────────────────────────────────────────────────────
 
-    def _prefetch_delay(self, track: dict) -> Optional[float]:
+    def _prefetch_delay(self, track: Track) -> Optional[float]:
         """
         Seconds to wait before prefetching, or ``None`` to start immediately.
 
@@ -258,7 +259,7 @@ class MusicPlayer:
         upcoming = self.queue[0]
         self._prefetch_task = self.bot.loop.create_task(self._prefetch_next(upcoming))
 
-    async def _prefetch_next(self, upcoming: dict) -> None:
+    async def _prefetch_next(self, upcoming: Track) -> None:
         try:
             stream = await self.bot.loop.run_in_executor(
                 None, media.spawn_stream, upcoming)
@@ -271,7 +272,7 @@ class MusicPlayer:
             return self._discard(stream)
         self._prefetch = (upcoming, stream)
 
-    def _take_prefetch(self, track: dict) -> Optional[media.AudioStream]:
+    def _take_prefetch(self, track: Track) -> Optional[media.AudioStream]:
         """
         The prefetched stream for ``track``, or ``None``.
 
@@ -296,7 +297,7 @@ class MusicPlayer:
         """Close a stream we are not going to play, off the event loop."""
         self.bot.loop.run_in_executor(None, stream.close)
 
-    async def _wait_for_end(self, track: dict) -> None:
+    async def _wait_for_end(self, track: Track) -> None:
         """Wait for the current track to finish, prefetching before it does."""
         delay = self._prefetch_delay(track)
         if delay is None:
@@ -316,7 +317,7 @@ class MusicPlayer:
         Live streams report no duration and cannot be seeked, and a position in
         the last couple of seconds would resume into silence or past the end.
         """
-        duration = (self.current or {}).get("duration")
+        duration = self.current.get("duration") if self.current else None
         if not duration:
             return 0.0
         position = self.elapsed
@@ -361,19 +362,22 @@ class MusicPlayer:
                 if not vc or not vc.is_connected():
                     return self.destroy()
 
-                # Stream the audio through yt-dlp → FFmpeg (see services.media).
-                # A stream fetched while the previous track played starts
-                # instantly; otherwise pay the 3–8s yt-dlp startup now.
-                stream = self._take_prefetch(track)
+                stream = await self._open_stream(track)
                 if stream is None:
-                    stream = await self.bot.loop.run_in_executor(
-                        None, media.spawn_stream, track)
+                    # Move on rather than retry: a replay flag left set would
+                    # make _advance hand back a track that is no longer there.
+                    self._replay = False
+                    self._resume_at = 0.0
+                    self.current = None
+                    continue
                 self._stream = stream
                 was_replay = self._replay
                 self._replay = False
                 seek_to = self._resume_at
                 self._resume_at = 0.0
                 self._seek_base = seek_to
+                if stream.stdout is None:
+                    raise RuntimeError("stream was closed before it could play")
                 source = media.make_pipe_source(
                     stream.stdout, volume=self.volume,
                     ffmpeg_filter=self.effect_filter, seek_seconds=seek_to,
@@ -419,13 +423,35 @@ class MusicPlayer:
             log.exception("Player loop crashed for guild %s", self.guild.id)
             self.destroy()
 
+    async def _open_stream(self, track: Track) -> Optional[media.AudioStream]:
+        """
+        The track's audio: the prefetched stream if there is one, else a new one.
+
+        A stream fetched while the previous track played starts instantly;
+        otherwise this pays the 3–8s yt-dlp startup. ``None`` means yt-dlp could
+        not even be started (no processes left, say). That is one track's
+        failure — it is announced here so the loop can carry on with the queue
+        instead of tearing the whole player down.
+        """
+        stream = self._take_prefetch(track)
+        if stream is not None:
+            return stream
+        try:
+            return await self.bot.loop.run_in_executor(
+                None, media.spawn_stream, track)
+        except Exception:
+            log.exception("Could not start streaming in guild %s", self.guild.id)
+            track["error"] = "unavailable"
+            await self.announcer.load_failed(track)
+            return None
+
     def _after_play(self, error: Optional[Exception]) -> None:
         """Runs in the voice thread — hand control back to the loop safely."""
         if error:
             log.warning("Playback error in guild %s: %s", self.guild.id, error)
         self.bot.loop.call_soon_threadsafe(self._next.set)
 
-    async def _advance(self) -> tuple[Optional[dict], bool]:
+    async def _advance(self) -> tuple[Optional[Track], bool]:
         """
         Decide the next track to play.
 

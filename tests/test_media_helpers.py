@@ -6,6 +6,8 @@ that decides what gets searched and how a yt-dlp result becomes a track.
 Process handling lives in ``tests/test_audio_stream.py``.
 """
 
+import asyncio
+
 import pytest
 
 from services import media
@@ -167,3 +169,45 @@ def test_a_client_needing_no_js_runtime_remains_as_a_last_resort():
     host where Deno failed to install.
     """
     assert "tv_embedded" in media._PLAYER_CLIENTS
+
+
+# ── which links the bot is willing to fetch ───────────────────────────
+#
+# Literal addresses and "localhost" resolve without a network, so these stay
+# offline like the rest of the suite.
+
+@pytest.mark.parametrize("url", [
+    "http://127.0.0.1/audio.mp3",
+    "http://localhost:8080/stream",
+    "http://192.168.1.1/",                  # the router of the LAN the bot sits in
+    "http://10.0.0.5/x",
+    "http://169.254.169.254/latest/meta-data/",   # cloud instance metadata
+    "http://[::1]/x",
+    "http://[::ffff:192.168.1.1]/x",        # a private IPv4 dressed up as IPv6
+    "http:///no-host",
+])
+async def test_links_into_private_networks_are_refused(url):
+    assert await media.is_public_url(url) is False
+
+
+async def test_a_link_to_a_public_address_is_allowed():
+    assert await media.is_public_url("https://8.8.8.8/audio.mp3") is True
+
+
+async def test_a_host_that_does_not_resolve_is_refused(monkeypatch):
+    async def unresolvable(*_args, **_kwargs):
+        raise OSError("Name or service not known")
+
+    loop = asyncio.get_running_loop()
+    monkeypatch.setattr(loop, "getaddrinfo", unresolvable)
+    assert await media.is_public_url("https://nowhere.invalid/x") is False
+
+
+async def test_one_private_address_among_public_ones_is_enough_to_refuse(monkeypatch):
+    """A name with a public and a private record could be answered with either."""
+    async def mixed(*_args, **_kwargs):
+        return [(2, 1, 6, "", ("8.8.8.8", 0)), (2, 1, 6, "", ("10.0.0.1", 0))]
+
+    loop = asyncio.get_running_loop()
+    monkeypatch.setattr(loop, "getaddrinfo", mixed)
+    assert await media.is_public_url("https://mixed.invalid/x") is False

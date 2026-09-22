@@ -4,7 +4,9 @@ from dataclasses import dataclass
 import discord
 from discord.ext import commands
 
+from config import COMMAND_PREFIX
 from utils.checks import same_voice_channel
+from utils.context import GuildContext
 from utils.embeds import BLURPLE, error_embed, success_embed
 from utils.player import players
 
@@ -56,24 +58,25 @@ _EFFECT_NAMES = list(EFFECTS)
 
 
 class Effects(commands.Cog, name="🎛️ Audio Effects"):
-    def __init__(self, bot: commands.Bot):
+    def __init__(self, bot: commands.Bot) -> None:
         self.bot = bot
         self._last_change: dict[int, float] = {}   # guild_id → monotonic time
 
-    def _throttled(self, ctx) -> bool:
+    def _throttled(self, ctx: GuildContext) -> bool:
         now = time.monotonic()
         if now - self._last_change.get(ctx.guild.id, 0.0) < _EFFECT_COOLDOWN:
             return True
         self._last_change[ctx.guild.id] = now
         return False
 
-    async def _switch_to(self, ctx, name: str | None, filter_str: str, label: str,
+    async def _switch_to(self, ctx: GuildContext, name: str | None, filter_str: str, label: str,
                          rate: float = 1.0) -> None:
         """Throttle, apply, and report — the whole path every effect command takes."""
         if self._throttled(ctx):
-            return await ctx.send(embed=error_embed(
+            await ctx.send(embed=error_embed(
                 f"Easy — wait {_EFFECT_COOLDOWN:.0f}s between effect changes."
             ))
+            return
         player = players.get(ctx.guild.id)
         if player and player.apply_effect(name, filter_str, rate):
             await ctx.send(embed=success_embed(label))
@@ -81,36 +84,39 @@ class Effects(commands.Cog, name="🎛️ Audio Effects"):
             await ctx.send(embed=error_embed("Nothing is playing."))
 
     @commands.command(name=_EFFECT_NAMES[0], aliases=_EFFECT_NAMES[1:],
-                      help="Apply an audio effect. Use !effects to see them all.")
+                      help=f"Apply an audio effect. Use {COMMAND_PREFIX}effects to see "
+                           "them all.")
     @same_voice_channel()
-    async def apply_effect(self, ctx):
-        name = ctx.invoked_with.lower()
+    async def apply_effect(self, ctx: GuildContext) -> None:
+        # Always set here: this callback only runs when invoked by one of its names.
+        name = (ctx.invoked_with or _EFFECT_NAMES[0]).lower()
         effect = EFFECTS[name]
         await self._switch_to(ctx, name, effect.filter, effect.label, effect.rate)
 
     @commands.command(name="reset", aliases=["fxreset", "noeffect"])
     @same_voice_channel()
-    async def reset_effect(self, ctx):
+    async def reset_effect(self, ctx: GuildContext) -> None:
         """Remove all audio effects."""
         await self._switch_to(ctx, None, "", "Audio effects removed ✅")
 
     @commands.command(name="effect")
-    async def current_effect(self, ctx):
+    async def current_effect(self, ctx: GuildContext) -> None:
         """Show the active audio effect."""
         player = players.get(ctx.guild.id)
         name = (player.effect_name if player else None) or "none"
         await ctx.send(embed=success_embed(f"Current effect: **{name}**"))
 
     @commands.command(name="effects")
-    async def list_effects(self, ctx):
+    async def list_effects(self, ctx: GuildContext) -> None:
         """List all available audio effects."""
+        prefix = ctx.clean_prefix
         await ctx.send(embed=discord.Embed(
             title="🎛️ Available Effects",
-            description=", ".join(f"`!{name}`" for name in EFFECTS)
-                        + "\n\nUse `!reset` to remove all effects.",
+            description=", ".join(f"`{prefix}{name}`" for name in EFFECTS)
+                        + f"\n\nUse `{prefix}reset` to remove all effects.",
             color=BLURPLE,
         ))
 
 
-async def setup(bot):
+async def setup(bot: commands.Bot) -> None:
     await bot.add_cog(Effects(bot))

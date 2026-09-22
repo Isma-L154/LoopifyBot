@@ -38,12 +38,14 @@ if ! command -v deno >/dev/null 2>&1; then
         *) echo "!! Unknown arch $ARCH — skipping Deno"; DENO_TARGET="" ;;
     esac
     if [[ -n "$DENO_TARGET" ]]; then
-        curl -fsSL -o /tmp/deno.zip \
+        # A private directory, not a fixed name in /tmp: this binary ends up
+        # in /usr/local/bin via sudo, so nobody else may get to place it first.
+        DENO_TMP="$(mktemp -d)"
+        curl -fsSL -o "$DENO_TMP/deno.zip" \
             "https://github.com/denoland/deno/releases/latest/download/deno-${DENO_TARGET}.zip"
-        unzip -o /tmp/deno.zip -d /tmp >/dev/null
-        sudo mv -f /tmp/deno /usr/local/bin/deno
-        sudo chmod +x /usr/local/bin/deno
-        rm -f /tmp/deno.zip
+        unzip -o "$DENO_TMP/deno.zip" -d "$DENO_TMP" >/dev/null
+        sudo install -m 755 "$DENO_TMP/deno" /usr/local/bin/deno
+        rm -rf "$DENO_TMP"
     fi
 fi
 command -v deno >/dev/null 2>&1 && echo "==> Deno: $(deno --version | head -1)"

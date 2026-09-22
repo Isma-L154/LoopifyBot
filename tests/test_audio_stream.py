@@ -228,3 +228,14 @@ def test_spawn_stream_omits_cookies_when_not_configured(monkeypatch):
     monkeypatch.delitem(media.YTDL_OPTIONS, "cookiefile", raising=False)
     media.spawn_stream({"url": "https://example.invalid/x", "title": "T"})
     assert "--cookies" not in captured["cmd"]
+
+
+def test_spawn_stream_never_lets_the_target_be_read_as_an_option(monkeypatch):
+    """A target starting with a dash must reach yt-dlp as a URL, not a flag."""
+    captured = {}
+    monkeypatch.setattr(AudioStream, "launch", classmethod(
+        lambda cls, cmd: captured.setdefault("cmd", cmd)
+    ))
+    media.spawn_stream({"url": "--exec=touch /tmp/pwned", "title": "T"})
+    cmd = captured["cmd"]
+    assert cmd[-2:] == ["--", "--exec=touch /tmp/pwned"]

@@ -1,11 +1,14 @@
 import asyncio
 import logging
+from typing import Optional, cast
 
 import discord
 from discord.ext import commands
 
 from services import media
+from services.media import Track
 from utils.player import players, MusicPlayer, MAX_QUEUE
+from utils.context import GuildContext
 from utils.embeds import (added_embed, error_embed, now_playing_embed,
                           queue_embed, success_embed)
 from utils.checks import user_in_voice, same_voice_channel
@@ -33,14 +36,20 @@ def _is_playlist_url(query: str) -> bool:
 
 
 class Music(commands.Cog, name="🎵 Music & Queue"):
-    def __init__(self, bot: commands.Bot):
+    def __init__(self, bot: commands.Bot) -> None:
         self.bot = bot
 
     # ── Helpers ───────────────────────────────────────────────────────
 
-    async def _ensure_voice(self, ctx) -> bool:
+    async def _ensure_voice(self, ctx: GuildContext) -> bool:
         """Connect (or move) the bot to the author's voice channel."""
-        dest = ctx.author.voice.channel
+        # Checked again although @user_in_voice already did: play awaits a
+        # DNS lookup in between, and the author can leave during it.
+        dest = ctx.author.voice.channel if ctx.author.voice else None
+        if dest is None:
+            await ctx.send(embed=error_embed(
+                "You must be in a voice channel to use this command."))
+            return False
         perms = dest.permissions_for(ctx.me)
         if not perms.connect or not perms.speak:
             await ctx.send(embed=error_embed(
@@ -61,7 +70,7 @@ class Music(commands.Cog, name="🎵 Music & Queue"):
             await ctx.send(embed=error_embed("Timed out connecting to voice."))
             return False
 
-    def _player(self, ctx) -> MusicPlayer:
+    def _player(self, ctx: GuildContext) -> MusicPlayer:
         return players.get_or_create(self.bot, ctx.guild, ctx.channel)
 
     # ── Playback commands ─────────────────────────────────────────────
@@ -70,14 +79,19 @@ class Music(commands.Cog, name="🎵 Music & Queue"):
     @commands.cooldown(rate=3, per=5.0, type=commands.BucketType.user)
     @commands.max_concurrency(1, per=commands.BucketType.user, wait=False)
     @user_in_voice()
-    async def play(self, ctx, *, query: str):
+    async def play(self, ctx: GuildContext, *, query: str) -> None:
         """Play from YouTube, SoundCloud or a direct link. Accepts URLs or search terms.
 
         Tip: prefix a search with `sc:` to search SoundCloud, e.g. `!play sc: lofi`.
         """
         query = query.strip()
         if len(query) > MAX_QUERY_LEN:
-            return await ctx.send(embed=error_embed("That query is too long."))
+            await ctx.send(embed=error_embed("That query is too long."))
+            return
+        if query.startswith("http") and not await media.is_public_url(query):
+            await ctx.send(embed=error_embed(
+                "I can only play links to public websites."))
+            return
         if not await self._ensure_voice(ctx):
             return
         player = self._player(ctx)
@@ -86,32 +100,37 @@ class Music(commands.Cog, name="🎵 Music & Queue"):
             if _is_playlist_url(query):
                 tracks = await media.get_playlist(query, loop=self.bot.loop)
                 if not tracks:
-                    return await ctx.send(embed=error_embed("Couldn't load that playlist."))
+                    await ctx.send(embed=error_embed("Couldn't load that playlist."))
+                    return
                 return await self._enqueue(ctx, player, tracks, "playlist")
 
             track = await media.search(query, loop=self.bot.loop)
             if not track:
-                return await ctx.send(embed=error_embed(f"No results found for `{query}`."))
+                await ctx.send(embed=error_embed(f"No results found for `{query}`."))
+                return
             await self._enqueue(ctx, player, [track], None)
 
-    async def _enqueue(self, ctx, player: MusicPlayer, tracks: list[dict], batch_label):
+    async def _enqueue(self, ctx: GuildContext, player: MusicPlayer,
+                       tracks: list[Track], batch_label: Optional[str]) -> None:
         """Add one or many tracks and report to the channel."""
         for t in tracks:
             t["requester"] = ctx.author        # who queued it (for Now Playing)
         was_idle = player.current is None and player.is_empty
         if len(tracks) == 1:
             if not player.add(tracks[0]):
-                return await ctx.send(embed=error_embed(
+                await ctx.send(embed=error_embed(
                     f"Queue is full (max {MAX_QUEUE} tracks)."
                 ))
+                return
             if not was_idle:
                 await ctx.send(embed=added_embed(tracks[0]))
         else:
             added = player.add_many(tracks)
             if added == 0:
-                return await ctx.send(embed=error_embed(
+                await ctx.send(embed=error_embed(
                     f"Queue is full (max {MAX_QUEUE} tracks)."
                 ))
+                return
             skipped = f" ({len(tracks) - added} skipped — queue full)" if added < len(tracks) else ""
             await ctx.send(embed=success_embed(
                 f"Added **{added} tracks** from {batch_label} to the queue.{skipped}"
@@ -119,7 +138,7 @@ class Music(commands.Cog, name="🎵 Music & Queue"):
 
     @commands.command()
     @same_voice_channel()
-    async def pause(self, ctx):
+    async def pause(self, ctx: GuildContext) -> None:
         """Pause the current track."""
         # Routed through the player so it can stop its playback clock; that
         # clock is what lets an effect change resume in the right place.
@@ -131,7 +150,7 @@ class Music(commands.Cog, name="🎵 Music & Queue"):
 
     @commands.command()
     @same_voice_channel()
-    async def resume(self, ctx):
+    async def resume(self, ctx: GuildContext) -> None:
         """Resume a paused track."""
         player = players.get(ctx.guild.id)
         if player and player.resume():
@@ -141,7 +160,7 @@ class Music(commands.Cog, name="🎵 Music & Queue"):
 
     @commands.command()
     @same_voice_channel()
-    async def skip(self, ctx):
+    async def skip(self, ctx: GuildContext) -> None:
         """Skip the current track."""
         player = players.get(ctx.guild.id)
         if player and player.skip():
@@ -151,7 +170,7 @@ class Music(commands.Cog, name="🎵 Music & Queue"):
 
     @commands.command(aliases=["prev"])
     @same_voice_channel()
-    async def previous(self, ctx):
+    async def previous(self, ctx: GuildContext) -> None:
         """Go back to the previous track."""
         player = players.get(ctx.guild.id)
         if player and player.go_previous():
@@ -161,7 +180,7 @@ class Music(commands.Cog, name="🎵 Music & Queue"):
 
     @commands.command(aliases=["dc", "leave"])
     @same_voice_channel()
-    async def stop(self, ctx):
+    async def stop(self, ctx: GuildContext) -> None:
         """Stop music and disconnect the bot."""
         player = players.get(ctx.guild.id)
         if player:
@@ -173,71 +192,79 @@ class Music(commands.Cog, name="🎵 Music & Queue"):
     # ── Queue commands ────────────────────────────────────────────────
 
     @commands.command(aliases=["q"])
-    async def queue(self, ctx, page: int = 1):
+    async def queue(self, ctx: GuildContext, page: int = 1) -> None:
         """Show the current queue."""
         player = players.get(ctx.guild.id)
         if not player:
-            return await ctx.send(embed=error_embed("Nothing is playing."))
+            await ctx.send(embed=error_embed("Nothing is playing."))
+            return
         await ctx.send(embed=queue_embed(player.to_list(), player.current, page=page))
 
     @commands.command(aliases=["np", "current"])
-    async def nowplaying(self, ctx):
+    async def nowplaying(self, ctx: GuildContext) -> None:
         """Show the currently playing track."""
         player = players.get(ctx.guild.id)
         if not player or not player.current:
-            return await ctx.send(embed=error_embed("Nothing is playing right now."))
+            await ctx.send(embed=error_embed("Nothing is playing right now."))
+            return
         await ctx.send(embed=now_playing_embed(player.current, ctx.author, loop_mode=player.loop_mode))
 
     @commands.command()
     @same_voice_channel()
-    async def volume(self, ctx, vol: int):
+    async def volume(self, ctx: GuildContext, vol: int) -> None:
         """Set volume (0–100)."""
         if not 0 <= vol <= 100:
-            return await ctx.send(embed=error_embed("Volume must be between 0 and 100."))
+            await ctx.send(embed=error_embed("Volume must be between 0 and 100."))
+            return
         player = players.get(ctx.guild.id)
         if not player:
-            return await ctx.send(embed=error_embed("Nothing is playing."))
+            await ctx.send(embed=error_embed("Nothing is playing."))
+            return
         player.set_volume(vol / 100)
         await ctx.send(embed=success_embed(f"Volume set to **{vol}%** 🔊"))
 
     @commands.command()
     @same_voice_channel()
-    async def loop(self, ctx, mode: str = "track"):
+    async def loop(self, ctx: GuildContext, mode: str = "track") -> None:
         """Set loop mode: track | queue | off"""
         mode = mode.lower()
         if mode not in ("track", "queue", "off"):
-            return await ctx.send(embed=error_embed("Loop mode must be `track`, `queue`, or `off`."))
+            await ctx.send(embed=error_embed("Loop mode must be `track`, `queue`, or `off`."))
+            return
         player = players.get(ctx.guild.id)
         if not player:
-            return await ctx.send(embed=error_embed("Nothing is playing."))
+            await ctx.send(embed=error_embed("Nothing is playing."))
+            return
         player.loop_mode = mode
         icons = {"track": "🔂", "queue": "🔁", "off": "➡️"}
         await ctx.send(embed=success_embed(f"Loop mode set to **{mode}** {icons[mode]}"))
 
     @commands.command()
     @same_voice_channel()
-    async def shuffle(self, ctx):
+    async def shuffle(self, ctx: GuildContext) -> None:
         """Shuffle the queue."""
         player = players.get(ctx.guild.id)
         if not player or player.is_empty:
-            return await ctx.send(embed=error_embed("Queue is empty."))
+            await ctx.send(embed=error_embed("Queue is empty."))
+            return
         player.shuffle()
         await ctx.send(embed=success_embed("Queue shuffled 🔀"))
 
     @commands.command()
     @same_voice_channel()
-    async def remove(self, ctx, index: int):
+    async def remove(self, ctx: GuildContext, index: int) -> None:
         """Remove a track from the queue by its position."""
         player = players.get(ctx.guild.id)
         track = player.remove(index) if player else None
         if not track:
-            return await ctx.send(embed=error_embed(f"No track at position {index}."))
+            await ctx.send(embed=error_embed(f"No track at position {index}."))
+            return
         await ctx.send(embed=success_embed(f"Removed **{track['title']}** from the queue."))
 
     @commands.command()
     @same_voice_channel()
-    async def move(self, ctx, from_pos: int, to_pos: int):
-        """Move a track in the queue: !move <from> <to>"""
+    async def move(self, ctx: GuildContext, from_pos: int, to_pos: int) -> None:
+        """Move a track to another position in the queue."""
         player = players.get(ctx.guild.id)
         if player and player.move(from_pos, to_pos):
             await ctx.send(embed=success_embed(f"Moved track **{from_pos}** → **{to_pos}**."))
@@ -246,7 +273,7 @@ class Music(commands.Cog, name="🎵 Music & Queue"):
 
     @commands.command()
     @same_voice_channel()
-    async def clear(self, ctx):
+    async def clear(self, ctx: GuildContext) -> None:
         """Clear the queue (keeps the current track playing)."""
         player = players.get(ctx.guild.id)
         if player:
@@ -255,11 +282,12 @@ class Music(commands.Cog, name="🎵 Music & Queue"):
 
     @commands.command()
     @same_voice_channel()
-    async def autoplay(self, ctx):
+    async def autoplay(self, ctx: GuildContext) -> None:
         """Toggle autoplay (auto-queue related tracks when the queue ends)."""
         player = players.get(ctx.guild.id)
         if not player:
-            return await ctx.send(embed=error_embed("Nothing is playing."))
+            await ctx.send(embed=error_embed("Nothing is playing."))
+            return
         player.autoplay = not player.autoplay
         state = "enabled 🟢" if player.autoplay else "disabled 🔴"
         await ctx.send(embed=success_embed(f"Autoplay {state}"))
@@ -270,11 +298,14 @@ class Music(commands.Cog, name="🎵 Music & Queue"):
     # centrally in utils.errors, so every command reports them the same way.
 
     @commands.Cog.listener()
-    async def on_voice_state_update(self, member, before, after):
+    async def on_voice_state_update(self, member: discord.Member,
+                                    before: discord.VoiceState,
+                                    after: discord.VoiceState) -> None:
         """Disconnect shortly after the bot is left alone in a channel."""
         if member.bot:
             return
-        vc = member.guild.voice_client
+        # Typed as the VoiceProtocol base; this bot only connects with VoiceClient.
+        vc = cast(Optional[discord.VoiceClient], member.guild.voice_client)
         if not vc:
             return
         if before.channel != vc.channel:
@@ -289,5 +320,5 @@ class Music(commands.Cog, name="🎵 Music & Queue"):
                     await vc.disconnect(force=True)
 
 
-async def setup(bot):
+async def setup(bot: commands.Bot) -> None:
     await bot.add_cog(Music(bot))

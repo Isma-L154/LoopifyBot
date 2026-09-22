@@ -11,6 +11,7 @@ import logging
 
 import discord
 
+from services.media import Track
 from utils.embeds import info_embed, load_error_embed, now_playing_embed
 
 log = logging.getLogger("loopify.announcer")
@@ -22,11 +23,11 @@ class ChannelAnnouncer:
     def __init__(self, channel: discord.abc.Messageable) -> None:
         self.channel = channel
 
-    async def now_playing(self, track: dict, requester: discord.abc.User,
+    async def now_playing(self, track: Track, requester: discord.abc.User,
                           loop_mode: str) -> None:
         await self._send(now_playing_embed(track, requester, loop_mode=loop_mode))
 
-    async def load_failed(self, track: dict) -> None:
+    async def load_failed(self, track: Track) -> None:
         await self._send(load_error_embed(track))
 
     async def idle_disconnect(self, after_seconds: float) -> None:
@@ -40,5 +41,5 @@ class ChannelAnnouncer:
         error worth propagating into the playback loop."""
         try:
             await self.channel.send(embed=embed)
-        except (discord.HTTPException, discord.Forbidden) as e:
+        except discord.HTTPException as e:
             log.debug("Could not announce to channel: %s", e)

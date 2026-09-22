@@ -85,7 +85,7 @@ def test_an_empty_body_parses_to_nothing():
     assert parse_lrc("") == ()
 
 
-def test_the_real_payload_parses(): 
+def test_the_real_payload_parses():
     lines = parse_lrc(REAL)
     assert len(lines) == 6
     assert lines[0] == (0.15, "Is this the real life? Is this just fantasy?")

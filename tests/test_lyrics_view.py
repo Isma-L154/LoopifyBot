@@ -132,3 +132,14 @@ def test_a_single_line_longer_than_the_limit_is_split_anyway():
 
 def test_empty_lyrics_give_one_empty_page():
     assert lyrics_pages("") == [""]
+
+
+@pytest.mark.parametrize("seconds,expected", [
+    (210, "0:03:30"),
+    (187.43, "0:03:07"),        # SoundCloud reports fractional durations
+    (3725.9, "1:02:05"),
+])
+def test_durations_are_shown_in_whole_seconds(seconds, expected):
+    from utils.embeds import format_duration
+
+    assert format_duration(seconds) == expected
