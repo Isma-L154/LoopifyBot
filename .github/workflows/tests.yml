@@ -41,6 +41,15 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements-dev.txt
 
+      - name: Lint
+        # Correctness rules only (see ruff.toml): an undefined name in a
+        # rarely-run branch otherwise surfaces as a crash in production.
+        run: ruff check .
+
+      - name: Type check
+        # Every function must be annotated (see mypy.ini).
+        run: mypy
+
       - name: Run tests
         # The suite needs no credentials, no network and no .env.
         # -ra surfaces anything that skipped, so silent skips stay visible.

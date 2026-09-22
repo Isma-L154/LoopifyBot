@@ -104,6 +104,8 @@ adds a fallback for songs LRCLIB does not have.
 ```bash
 .venv/bin/pip install -r requirements-dev.txt   # Windows: .venv\Scripts\pip
 pytest
+ruff check .      # correctness lint (ruff.toml)
+mypy              # every function must be typed (mypy.ini)
 ```
 
 The suite needs **no credentials, no network and no `.env`** — it mocks the
@@ -118,7 +120,8 @@ A few tests render audio through **real FFmpeg** to measure the pitch and speed
 filters, since a wrong filter string looks perfectly reasonable and only shows up
 as the wrong playback speed. Those skip automatically if FFmpeg is not installed.
 
-CI runs everything on every push and pull request against Python 3.11 and 3.12.
+CI runs the lint, the type check and the tests on every push and pull request,
+against Python 3.11 and 3.12.
 
 ### Deploy to a server
 See **[deploy/README.md](deploy/README.md)** for the full walkthrough:
