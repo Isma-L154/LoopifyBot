@@ -73,14 +73,18 @@ class Track(TypedDict):
 # chain right avoids needing them at all.
 _PLAYER_CLIENTS = ("web_embedded", "mweb", "tv_embedded")
 
+# Shared by the metadata options and the streaming command, for the same reason.
+_FORMAT = "bestaudio/best"
+_SOURCE_ADDRESS = "0.0.0.0"     # bind to IPv4; avoids some 403s
+
 # Base yt-dlp config shared by every call.
 YTDL_OPTIONS: dict[str, Any] = {
-    "format": "bestaudio/best",
+    "format": _FORMAT,
     "noplaylist": True,
     "quiet": True,
     "no_warnings": True,
     "default_search": "ytsearch",
-    "source_address": "0.0.0.0",   # bind to IPv4; avoids some 403s
+    "source_address": _SOURCE_ADDRESS,
     "skip_download": True,
     "extractor_args": {
         "youtube": {"player_client": list(_PLAYER_CLIENTS)},
@@ -377,11 +381,11 @@ def spawn_stream(track: Track) -> AudioStream:
     """Start streaming a track's best audio through yt-dlp."""
     cmd = [
         sys.executable, "-m", "yt_dlp",
-        "-f", "bestaudio/best",
+        "-f", _FORMAT,
         "-o", "-",                       # write audio to stdout
         "-q", "--no-warnings", "--no-playlist",
         "--extractor-args", f"youtube:player_client={','.join(_PLAYER_CLIENTS)}",
-        "--source-address", "0.0.0.0",
+        "--source-address", _SOURCE_ADDRESS,
     ]
     cookies = YTDL_OPTIONS.get("cookiefile")
     if cookies:
