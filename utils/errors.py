@@ -80,5 +80,5 @@ async def handle(ctx, error: Exception) -> None:
 async def _reply(ctx, message: str) -> None:
     try:
         await ctx.send(embed=error_embed(message))
-    except (discord.HTTPException, discord.Forbidden) as e:
+    except discord.HTTPException as e:
         log.debug("Could not report an error to the channel: %s", e)

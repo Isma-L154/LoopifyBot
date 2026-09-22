@@ -361,13 +361,14 @@ class MusicPlayer:
                 if not vc or not vc.is_connected():
                     return self.destroy()
 
-                # Stream the audio through yt-dlp → FFmpeg (see services.media).
-                # A stream fetched while the previous track played starts
-                # instantly; otherwise pay the 3–8s yt-dlp startup now.
-                stream = self._take_prefetch(track)
+                stream = await self._open_stream(track)
                 if stream is None:
-                    stream = await self.bot.loop.run_in_executor(
-                        None, media.spawn_stream, track)
+                    # Move on rather than retry: a replay flag left set would
+                    # make _advance hand back a track that is no longer there.
+                    self._replay = False
+                    self._resume_at = 0.0
+                    self.current = None
+                    continue
                 self._stream = stream
                 was_replay = self._replay
                 self._replay = False
@@ -418,6 +419,28 @@ class MusicPlayer:
         except Exception:
             log.exception("Player loop crashed for guild %s", self.guild.id)
             self.destroy()
+
+    async def _open_stream(self, track: dict) -> Optional[media.AudioStream]:
+        """
+        The track's audio: the prefetched stream if there is one, else a new one.
+
+        A stream fetched while the previous track played starts instantly;
+        otherwise this pays the 3–8s yt-dlp startup. ``None`` means yt-dlp could
+        not even be started (no processes left, say). That is one track's
+        failure — it is announced here so the loop can carry on with the queue
+        instead of tearing the whole player down.
+        """
+        stream = self._take_prefetch(track)
+        if stream is not None:
+            return stream
+        try:
+            return await self.bot.loop.run_in_executor(
+                None, media.spawn_stream, track)
+        except Exception:
+            log.exception("Could not start streaming in guild %s", self.guild.id)
+            track["error"] = "unavailable"
+            await self.announcer.load_failed(track)
+            return None
 
     def _after_play(self, error: Optional[Exception]) -> None:
         """Runs in the voice thread — hand control back to the loop safely."""

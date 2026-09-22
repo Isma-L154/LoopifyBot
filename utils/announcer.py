@@ -40,5 +40,5 @@ class ChannelAnnouncer:
         error worth propagating into the playback loop."""
         try:
             await self.channel.send(embed=embed)
-        except (discord.HTTPException, discord.Forbidden) as e:
+        except discord.HTTPException as e:
             log.debug("Could not announce to channel: %s", e)
