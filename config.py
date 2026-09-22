@@ -20,10 +20,23 @@ from dotenv import load_dotenv
 PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
 load_dotenv(os.path.join(PROJECT_ROOT, ".env"))
 
+
+def project_path(value: Optional[str]) -> Optional[str]:
+    """A path from .env, with a relative one read from the project root.
+
+    The same anchoring as .env itself, and for the same reason: resolved
+    against the working directory, `COOKIES_PATH=cookies.txt` silently found
+    nothing whenever the bot was started from anywhere else.
+    """
+    if not value or os.path.isabs(value):
+        return value
+    return os.path.join(PROJECT_ROOT, value)
+
+
 DISCORD_TOKEN  = os.getenv("DISCORD_TOKEN")
 COMMAND_PREFIX = os.getenv("COMMAND_PREFIX", "!")
 GENIUS_TOKEN   = os.getenv("GENIUS_TOKEN")
-COOKIES_PATH   = os.getenv("COOKIES_PATH")
+COOKIES_PATH   = project_path(os.getenv("COOKIES_PATH"))
 LOG_LEVEL      = os.getenv("LOG_LEVEL", "INFO").upper()
 
 COGS = [

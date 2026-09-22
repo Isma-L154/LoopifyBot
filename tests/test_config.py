@@ -185,3 +185,21 @@ def test_the_bot_unit_is_defined_exactly_once():
             if "Description=LoopifyBot Discord Music Bot" in handle.read():
                 definers.append(path)
     assert len(definers) == 1, f"the service unit is defined in {len(definers)} places: {definers}"
+
+
+# -- paths from .env -------------------------------------------------------
+
+def test_a_relative_path_is_read_from_the_project_root():
+    import os
+
+    assert config.project_path("cookies.txt") == os.path.join(config.PROJECT_ROOT, "cookies.txt")
+
+
+def test_an_absolute_path_is_left_alone(tmp_path):
+    absolute = str(tmp_path / "cookies.txt")
+    assert config.project_path(absolute) == absolute
+
+
+@pytest.mark.parametrize("unset", [None, ""])
+def test_an_unset_path_stays_unset(unset):
+    assert config.project_path(unset) == unset
