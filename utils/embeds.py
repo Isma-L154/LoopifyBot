@@ -16,7 +16,9 @@ GOLD = 0xFFD700
 def format_duration(seconds: Optional[float]) -> str:
     if not seconds:
         return "🔴 LIVE"
-    return str(timedelta(seconds=seconds))
+    # Whole seconds: SoundCloud reports durations like 187.43, which timedelta
+    # would render as 0:03:07.430000.
+    return str(timedelta(seconds=int(seconds)))
 
 
 def _linked_title(track: Track) -> str:
