@@ -5,13 +5,18 @@
 #
 # Prereqs: AWS CLI configured, an existing EC2 key pair whose .pem you hold.
 #
+# Usage:
+#   KEY_NAME=my-key-pair bash deploy/launch_ec2.sh
+#
 set -euo pipefail
 
 # ── Config (override via environment) ─────────────────────────────────
 REGION="${AWS_REGION:-us-east-1}"
 INSTANCE_TYPE="${INSTANCE_TYPE:-t4g.micro}"           # ARM, free-tier eligible
 AMI_ID="${AMI_ID:-ami-02c4144237becae44}"             # Ubuntu 24.04 arm64 (us-east-1)
-KEY_NAME="${KEY_NAME:-ils-acc-examplekey-us-east-1}"  # existing key pair
+# The EC2 key pair to install on the instance. No default: it has to be one
+# whose .pem you hold, and guessing wrong launches a box nobody can log in to.
+KEY_NAME="${KEY_NAME:?Set KEY_NAME to an existing EC2 key pair name}"
 SG_NAME="${SG_NAME:-loopify-bot-sg}"
 NAME_TAG="${NAME_TAG:-loopify-bot}"
 VOLUME_GB="${VOLUME_GB:-8}"

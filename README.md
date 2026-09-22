@@ -85,7 +85,8 @@ No installation required — the bot is hosted and always online.
 ### Requirements
 - Python 3.11+
 - FFmpeg on your PATH
-- A Discord bot token (with the **Message Content** and **Server Members** intents enabled)
+- A Discord bot token with the **Message Content** intent enabled — the only
+  privileged intent the bot asks for
 
 ### Run locally
 ```bash

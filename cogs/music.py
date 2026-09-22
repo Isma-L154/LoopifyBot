@@ -78,6 +78,9 @@ class Music(commands.Cog, name="🎵 Music & Queue"):
         query = query.strip()
         if len(query) > MAX_QUERY_LEN:
             return await ctx.send(embed=error_embed("That query is too long."))
+        if query.startswith("http") and not await media.is_public_url(query):
+            return await ctx.send(embed=error_embed(
+                "I can only play links to public websites."))
         if not await self._ensure_voice(ctx):
             return
         player = self._player(ctx)

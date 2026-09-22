@@ -21,12 +21,14 @@ import os
 import sys
 import time
 import queue
+import ipaddress
 import threading
 import subprocess
 import tempfile
 import asyncio
 import logging
 from typing import Optional
+from urllib.parse import urlsplit
 
 import discord
 import yt_dlp
@@ -178,6 +180,31 @@ async def related(track: dict, *, loop=None) -> Optional[dict]:
         if cand.get("url") and cand["url"] != track.get("url"):
             return cand
     return None
+
+
+async def is_public_url(url: str) -> bool:
+    """
+    Whether every address ``url``'s host resolves to is on the public internet.
+
+    yt-dlp fetches whatever it is given, from the host the bot runs on. Without
+    this, ``!play http://192.168.1.1/`` makes the bot probe the LAN it sits in
+    (or a cloud metadata endpoint) on behalf of anyone in any guild. A host
+    that does not resolve is refused too: there is nothing to play there, and
+    it is not worth letting through to find out.
+
+    This does not follow redirects — yt-dlp does that itself — so it narrows
+    the exposure rather than closing it.
+    """
+    host = urlsplit(url).hostname
+    if not host:
+        return False
+    try:
+        infos = await asyncio.get_running_loop().getaddrinfo(host, None)
+    except OSError:
+        return False
+    addresses = {info[4][0].split("%", 1)[0] for info in infos}   # drop IPv6 scope
+    return bool(addresses) and all(
+        ipaddress.ip_address(address).is_global for address in addresses)
 
 
 def _first_entry(info):
@@ -339,7 +366,10 @@ def spawn_stream(track: dict) -> AudioStream:
     cookies = YTDL_OPTIONS.get("cookiefile")
     if cookies:
         cmd += ["--cookies", cookies]
-    cmd.append(_stream_target(track))
+    # `--` ends option parsing, so a target that starts with a dash is read as a
+    # URL and never as a flag. _search_target already prefixes every non-URL
+    # query, but the argv of a subprocess is not the place to rely on that.
+    cmd += ["--", _stream_target(track)]
     return AudioStream.launch(cmd)
 
 

@@ -144,6 +144,18 @@ async def test_play_rejects_an_over_length_query(music_cog, ctx):
     ctx.typing.assert_not_called()      # rejected before any yt-dlp work
 
 
+@pytest.mark.parametrize("url", [
+    "http://192.168.1.1/admin",
+    "http://127.0.0.1:8080/",
+])
+async def test_play_refuses_links_into_private_networks(music_cog, ctx, url):
+    ctx.author.voice.channel = MagicMock()
+    with patch("cogs.music.media.search", new=AsyncMock()) as search:
+        await Music.play.callback(music_cog, ctx, query=url)
+    assert "public" in sent_text(ctx)
+    search.assert_not_awaited()
+
+
 async def test_shuffle_on_an_empty_queue(music_cog, ctx):
     await Music.shuffle.callback(music_cog, ctx)
     assert "empty" in sent_text(ctx).lower()

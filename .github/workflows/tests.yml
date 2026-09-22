@@ -5,6 +5,11 @@ on:
     branches: [main]
   pull_request:
 
+# The job only reads the repo. Without this, GITHUB_TOKEN gets the repository's
+# default scopes, which can include write access.
+permissions:
+  contents: read
+
 jobs:
   pytest:
     runs-on: ubuntu-latest
