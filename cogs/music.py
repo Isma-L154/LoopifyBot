@@ -240,7 +240,7 @@ class Music(commands.Cog, name="🎵 Music & Queue"):
     @commands.command()
     @same_voice_channel()
     async def move(self, ctx, from_pos: int, to_pos: int):
-        """Move a track in the queue: !move <from> <to>"""
+        """Move a track to another position in the queue."""
         player = players.get(ctx.guild.id)
         if player and player.move(from_pos, to_pos):
             await ctx.send(embed=success_embed(f"Moved track **{from_pos}** → **{to_pos}**."))

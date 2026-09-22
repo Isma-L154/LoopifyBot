@@ -4,6 +4,7 @@ from dataclasses import dataclass
 import discord
 from discord.ext import commands
 
+from config import COMMAND_PREFIX
 from utils.checks import same_voice_channel
 from utils.embeds import BLURPLE, error_embed, success_embed
 from utils.player import players
@@ -81,7 +82,8 @@ class Effects(commands.Cog, name="🎛️ Audio Effects"):
             await ctx.send(embed=error_embed("Nothing is playing."))
 
     @commands.command(name=_EFFECT_NAMES[0], aliases=_EFFECT_NAMES[1:],
-                      help="Apply an audio effect. Use !effects to see them all.")
+                      help=f"Apply an audio effect. Use {COMMAND_PREFIX}effects to see "
+                           "them all.")
     @same_voice_channel()
     async def apply_effect(self, ctx):
         name = ctx.invoked_with.lower()
@@ -104,10 +106,11 @@ class Effects(commands.Cog, name="🎛️ Audio Effects"):
     @commands.command(name="effects")
     async def list_effects(self, ctx):
         """List all available audio effects."""
+        prefix = ctx.clean_prefix
         await ctx.send(embed=discord.Embed(
             title="🎛️ Available Effects",
-            description=", ".join(f"`!{name}`" for name in EFFECTS)
-                        + "\n\nUse `!reset` to remove all effects.",
+            description=", ".join(f"`{prefix}{name}`" for name in EFFECTS)
+                        + f"\n\nUse `{prefix}reset` to remove all effects.",
             color=BLURPLE,
         ))
 

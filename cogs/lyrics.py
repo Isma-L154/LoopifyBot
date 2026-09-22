@@ -271,7 +271,8 @@ class Lyrics(commands.Cog, name="\U0001f3a4 Lyrics"):
                 found = await self._for_track(player.current)
             else:
                 return await ctx.send(embed=error_embed(
-                    "Nothing is playing. Provide a song name: `!lyrics <title>`"
+                    f"Nothing is playing. Provide a song name: "
+                    f"`{ctx.clean_prefix}lyrics <title>`"
                 ))
 
             if found is None:

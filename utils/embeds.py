@@ -3,6 +3,8 @@ from typing import Optional
 
 import discord
 
+from config import COMMAND_PREFIX
+
 GREEN = 0x1DB954
 BLURPLE = 0x5865F2
 RED = 0xFF4444
@@ -34,7 +36,7 @@ def now_playing_embed(track: dict, requester: discord.abc.User,
         embed.add_field(name="📺 Channel", value=track["uploader"], inline=True)
     if track.get("thumbnail"):
         embed.set_thumbnail(url=track["thumbnail"])
-    embed.set_footer(text="🎧 Use !queue to see upcoming tracks")
+    embed.set_footer(text=f"🎧 Use {COMMAND_PREFIX}queue to see upcoming tracks")
     return embed
 
 
@@ -80,7 +82,7 @@ def load_error_embed(track: dict) -> discord.Embed:
     if track.get("error") == "blocked":
         return error_embed(
             f"YouTube is rate-limiting this server, so **{title}** can't be "
-            f"loaded right now. Try SoundCloud instead — e.g. `!play sc: {title}`."
+            f"loaded right now. Try SoundCloud instead — e.g. `{COMMAND_PREFIX}play sc: {title}`."
         )
     return error_embed(f"Couldn't load **{title}** — skipping.")
 

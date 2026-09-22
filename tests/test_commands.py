@@ -271,3 +271,34 @@ async def test_voice_update_in_a_different_channel_is_ignored(music_cog):
             music_cog, member, MagicMock(channel=other_channel), MagicMock(channel=None)
         )
     vc.disconnect.assert_not_awaited()
+
+
+# -- the configured prefix, not a hardcoded "!" -------------------------
+#
+# COMMAND_PREFIX is configurable, and a reply that names "!reset" to a server
+# using "?" points at a command that does not exist there.
+
+async def test_effects_list_uses_the_prefix_it_was_invoked_with(effects_cog, ctx):
+    ctx.clean_prefix = "?"
+    await Effects.list_effects.callback(effects_cog, ctx)
+    text = sent_text(ctx)
+    assert "`?bass`" in text and "`?reset`" in text
+    assert "`!" not in text
+
+
+async def test_lyrics_hint_uses_the_prefix_it_was_invoked_with(ctx):
+    from cogs.lyrics import Lyrics
+
+    ctx.clean_prefix = "?"
+    await Lyrics.lyrics.callback(Lyrics(MagicMock()), ctx)
+    assert "`?lyrics <title>`" in sent_text(ctx)
+
+
+def test_embeds_name_commands_with_the_configured_prefix(monkeypatch):
+    from utils import embeds
+
+    monkeypatch.setattr(embeds, "COMMAND_PREFIX", "?")
+    track = {"title": "Song", "url": None, "error": "blocked"}
+    assert "?play sc: Song" in embeds.load_error_embed(track).description
+    footer = embeds.now_playing_embed(track, MagicMock()).footer.text
+    assert "?queue" in footer and "!" not in footer
