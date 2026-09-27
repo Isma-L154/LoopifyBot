@@ -3,6 +3,7 @@ import logging
 from typing import cast
 
 import discord
+from discord import app_commands
 from discord.ext import commands
 
 import config
@@ -27,6 +28,9 @@ bot = commands.Bot(
     intents=intents,
     help_command=None,        # replaced by the generated one below
     case_insensitive=True,
+    # Every command acts on a server's voice and queue, so `/` commands are not
+    # offered in DMs at all. guild_only below still covers the `!` ones.
+    allowed_contexts=app_commands.AppCommandContext(guild=True),
 )
 bot.add_check(guild_only)
 
@@ -38,7 +42,7 @@ async def on_ready() -> None:
     await bot.change_presence(
         activity=discord.Activity(
             type=discord.ActivityType.listening,
-            name=f"{COMMAND_PREFIX}play",
+            name="/play",
         )
     )
 
@@ -50,7 +54,7 @@ async def on_command_error(ctx: commands.Context[commands.Bot],
     await errors.handle(ctx, error)
 
 
-@bot.command(name="help")
+@bot.hybrid_command(name="help")
 async def help_command(ctx: commands.Context[commands.Bot]) -> None:
     """Show this message."""
     await ctx.send(embed=build_help(bot, COMMAND_PREFIX))

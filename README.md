@@ -12,6 +12,8 @@ A fully-featured Discord music bot built with Python. Supports YouTube and Sound
 - 📋 **Queue system** — Full queue management with shuffle, loop, and history
 - 🎛️ **Audio effects** — Bass boost, nightcore, vaporwave, 8D audio, echo, and more
 - 🎤 **Live lyrics** — One message that follows the song line by line, karaoke-style
+- 🎛️ **Buttons** — Pause, skip, previous, stop, loop, shuffle, queue and lyrics right under Now Playing
+- ⚡ **Slash commands** — Every command also works as `/command`, with search suggestions in `/play`
 - 🔊 **Volume control** — Per-server volume adjustment
 - 🔁 **Loop modes** — Loop a single track or the entire queue
 - ▶️ **Autoplay** — Automatically queue related tracks when the queue ends
@@ -19,6 +21,14 @@ A fully-featured Discord music bot built with Python. Supports YouTube and Sound
 ---
 
 ## 📋 Commands
+
+Every command below also works as a slash command: `/play`, `/skip`, `/effect`…
+Aliases (`!p`, `!q`, `!bass`…) are `!`-only.
+
+Each **Now Playing** message carries buttons for anyone in the bot's voice
+channel: ⏮ ⏯ ⏭ ⏹ on the first row, 🔁 (cycle loop) 🔀 (shuffle) 📜 (queue,
+shown only to you) 🎤 (live lyrics) on the second. When the next song starts,
+the previous message's buttons are disabled.
 
 ### ▶️ Playback
 
@@ -58,7 +68,7 @@ A fully-featured Discord music bot built with Python. Supports YouTube and Sound
 | `!8d` | Apply 8D audio (use headphones!) |
 | `!karaoke` | Remove center vocals |
 | `!reset` | Remove all audio effects |
-| `!effect` | Show which effect is currently active |
+| `!effect [name]` | Show the active effect, or apply one by name (`/effect` lists them) |
 | `!effects` | List all available effects |
 
 ### 🎤 Extras

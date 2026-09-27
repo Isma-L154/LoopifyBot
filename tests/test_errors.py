@@ -10,6 +10,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import discord
 import pytest
+from discord import app_commands
 from discord.ext import commands
 
 from utils import errors
@@ -260,3 +261,24 @@ def test_the_global_check_is_registered_on_the_bot(monkeypatch):
         assert guild_only in main.bot._checks
     finally:
         sys.modules.pop("main", None)
+
+
+# -- slash invocation -----------------------------------------------------
+
+async def test_an_out_of_range_value_names_the_bounds(ctx):
+    await errors.handle(ctx, commands.RangeError(101, minimum=0, maximum=100))
+    assert "between 0 and 100" in sent_text(ctx)
+
+
+async def test_a_slash_command_error_is_unwrapped_through_both_layers(ctx, caplog):
+    """Under `/` the real exception sits two wrappers deep."""
+    real = RuntimeError("boom")
+    inner = app_commands.CommandInvokeError(MagicMock(), real)
+    await errors.handle(ctx, commands.HybridCommandError(inner))
+    assert "Something went wrong" in sent_text(ctx)
+    assert any(r.exc_info and r.exc_info[1] is real for r in caplog.records)
+
+
+async def test_error_replies_are_private_under_slash(ctx):
+    await errors.handle(ctx, missing_arg())
+    assert ctx.send.await_args.kwargs["ephemeral"] is True

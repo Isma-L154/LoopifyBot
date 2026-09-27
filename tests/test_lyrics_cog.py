@@ -150,3 +150,68 @@ async def test_a_query_without_a_separator_is_searched_once(cog, monkeypatch):
     await cog._search("Bohemian Rhapsody")
 
     assert fetch.await_count == 1, "there is no other order to try"
+
+
+# -- the Now Playing lyrics button ---------------------------------------
+
+async def test_the_cog_offers_itself_to_the_lyrics_button_while_loaded(monkeypatch):
+    from utils import now_playing_view
+
+    monkeypatch.setattr(now_playing_view, "_lyrics", None)
+    cog = LyricsCog(MagicMock())
+    await cog.cog_load()
+    assert now_playing_view._lyrics == cog.show_current
+    await cog.cog_unload()
+    assert now_playing_view._lyrics is None
+
+
+async def test_show_current_with_nothing_playing(cog):
+    player = MagicMock(current=None)
+    assert await cog.show_current(MagicMock(), player) is False
+
+
+async def test_show_current_when_nothing_is_found(cog, monkeypatch):
+    monkeypatch.setattr(cog, "_for_track", AsyncMock(return_value=None))
+    channel = MagicMock(send=AsyncMock())
+    assert await cog.show_current(channel, MagicMock()) is False
+    channel.send.assert_not_awaited()
+
+
+async def test_show_current_posts_unsynced_lyrics_to_the_channel(cog, monkeypatch):
+    plain = synced_lyrics.Lyrics("T", "A", plain="just words")
+    monkeypatch.setattr(cog, "_for_track", AsyncMock(return_value=plain))
+    channel = MagicMock(send=AsyncMock())
+    assert await cog.show_current(channel, MagicMock()) is True
+    assert "just words" in channel.send.await_args.kwargs["embed"].description
+
+
+async def test_show_current_follows_synced_lyrics(cog, monkeypatch):
+    synced = synced_lyrics.Lyrics("T", "A", lines=((0.0, "line"),))
+    monkeypatch.setattr(cog, "_for_track", AsyncMock(return_value=synced))
+    follow = AsyncMock()
+    monkeypatch.setattr(cog, "_follow", follow)
+    channel, player = MagicMock(), MagicMock()
+    assert await cog.show_current(channel, player) is True
+    follow.assert_awaited_once_with(channel, player, synced)
+
+
+# -- /lyrics ----------------------------------------------------------------
+
+async def test_slash_lyrics_go_to_the_channel_not_the_interaction(cog, monkeypatch):
+    """An interaction reply stops being editable after 15 minutes; a live
+    lyrics message is edited for as long as the music plays."""
+    from cogs.lyrics import Lyrics
+    from utils.player import players
+
+    monkeypatch.setattr(players, "get", lambda guild_id: None)
+    found = synced_lyrics.Lyrics("T", "A", plain="words")
+    monkeypatch.setattr(cog, "_search", AsyncMock(return_value=found))
+    present = AsyncMock()
+    monkeypatch.setattr(cog, "_present", present)
+    ctx = MagicMock(send=AsyncMock(), interaction=MagicMock())
+    ctx.typing = MagicMock(return_value=AsyncMock())
+
+    await Lyrics.lyrics.callback(cog, ctx, query="T - A")
+
+    assert present.await_args.args[0] is ctx.channel
+    assert ctx.send.await_args.kwargs["ephemeral"] is True

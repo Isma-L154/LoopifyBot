@@ -43,6 +43,7 @@ COGS = [
     "cogs.music",
     "cogs.effects",
     "cogs.lyrics",
+    "cogs.admin",
 ]
 
 

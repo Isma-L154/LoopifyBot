@@ -84,3 +84,9 @@ async def test_same_channel_passes_when_the_bot_is_not_connected_yet(ctx):
     ctx.author.voice = in_channel(MagicMock())
     ctx.voice_client = None
     assert await same_voice_channel().predicate(ctx) is True
+
+
+async def test_refusals_are_private_under_slash(ctx):
+    """Under `/` only the person refused sees why; under `!` the flag is ignored."""
+    assert await user_in_voice().predicate(ctx) is False
+    assert ctx.send.await_args.kwargs["ephemeral"] is True

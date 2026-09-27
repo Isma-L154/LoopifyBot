@@ -1,12 +1,14 @@
 import time
 from dataclasses import dataclass
+from typing import Optional
 
 import discord
+from discord import app_commands
 from discord.ext import commands
 
 from config import COMMAND_PREFIX
-from utils.checks import same_voice_channel
-from utils.context import GuildContext
+from utils.checks import in_same_voice_channel, same_voice_channel
+from utils.context import GuildContext, hybrid_command
 from utils.embeds import BLURPLE, error_embed, success_embed
 from utils.player import players
 
@@ -75,13 +77,13 @@ class Effects(commands.Cog, name="🎛️ Audio Effects"):
         if self._throttled(ctx):
             await ctx.send(embed=error_embed(
                 f"Easy — wait {_EFFECT_COOLDOWN:.0f}s between effect changes."
-            ))
+            ), ephemeral=True)
             return
         player = players.get(ctx.guild.id)
         if player and player.apply_effect(name, filter_str, rate):
             await ctx.send(embed=success_embed(label))
         else:
-            await ctx.send(embed=error_embed("Nothing is playing."))
+            await ctx.send(embed=error_embed("Nothing is playing."), ephemeral=True)
 
     @commands.command(name=_EFFECT_NAMES[0], aliases=_EFFECT_NAMES[1:],
                       help=f"Apply an audio effect. Use {COMMAND_PREFIX}effects to see "
@@ -93,27 +95,45 @@ class Effects(commands.Cog, name="🎛️ Audio Effects"):
         effect = EFFECTS[name]
         await self._switch_to(ctx, name, effect.filter, effect.label, effect.rate)
 
-    @commands.command(name="reset", aliases=["fxreset", "noeffect"])
+    @hybrid_command(name="reset", aliases=["fxreset", "noeffect"])
     @same_voice_channel()
     async def reset_effect(self, ctx: GuildContext) -> None:
         """Remove all audio effects."""
         await self._switch_to(ctx, None, "", "Audio effects removed ✅")
 
-    @commands.command(name="effect")
-    async def current_effect(self, ctx: GuildContext) -> None:
-        """Show the active audio effect."""
-        player = players.get(ctx.guild.id)
-        name = (player.effect_name if player else None) or "none"
-        await ctx.send(embed=success_embed(f"Current effect: **{name}**"))
+    @hybrid_command(name="effect")
+    @app_commands.describe(name="The effect to apply; leave it out to see the active one")
+    @app_commands.choices(name=[app_commands.Choice(name=n, value=n) for n in EFFECTS])
+    async def effect(self, ctx: GuildContext, name: Optional[str] = None) -> None:
+        """Show the active audio effect, or apply one by name."""
+        if name is None:
+            player = players.get(ctx.guild.id)
+            active = (player.effect_name if player else None) or "none"
+            await ctx.send(embed=success_embed(f"Current effect: **{active}**"))
+            return
+        name = name.lower()
+        chosen = EFFECTS.get(name)
+        if chosen is None:
+            await ctx.send(embed=error_embed(
+                f"Unknown effect `{name}`. See `{ctx.clean_prefix}effects`."), ephemeral=True)
+            return
+        if await in_same_voice_channel(ctx):
+            await self._switch_to(ctx, name, chosen.filter, chosen.label, chosen.rate)
 
-    @commands.command(name="effects")
+    @hybrid_command(name="effects")
     async def list_effects(self, ctx: GuildContext) -> None:
         """List all available audio effects."""
         prefix = ctx.clean_prefix
+        if ctx.interaction is None:
+            names = ", ".join(f"`{prefix}{name}`" for name in EFFECTS)
+        else:
+            # The per-effect shortcuts are aliases, and aliases do not exist
+            # under `/`; there every effect goes through /effect.
+            names = ("Pick one with `/effect`: "
+                     + ", ".join(f"`{name}`" for name in EFFECTS))
         await ctx.send(embed=discord.Embed(
             title="🎛️ Available Effects",
-            description=", ".join(f"`{prefix}{name}`" for name in EFFECTS)
-                        + f"\n\nUse `{prefix}reset` to remove all effects.",
+            description=f"{names}\n\nUse `{prefix}reset` to remove all effects.",
             color=BLURPLE,
         ))
 
