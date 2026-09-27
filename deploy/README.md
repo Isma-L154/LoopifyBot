@@ -52,6 +52,11 @@ sudo systemctl start loopify-bot
 sudo journalctl -u loopify-bot -f      # look for "Logged in as ..."
 ```
 
+Then, from the Discord account that owns the bot application, send `!sync` in
+any server the bot is in. That registers the `/` commands with Discord; until
+it runs, only the `!` commands exist. The bot does not do this on its own at
+startup because Discord rate-limits it and the bot restarts unattended.
+
 ## 3. Updating later
 
 ```bash
@@ -65,6 +70,9 @@ came back — printing recent logs and failing loudly if it did not.
 The units are reinstalled every time on purpose: a pull can change how the bot is
 *run* (sandboxing, resource caps, stop timeouts), and restarting alone would keep
 the old configuration while the repo claimed otherwise.
+
+If the update added, removed or changed a command, send `!sync` again so the
+`/` menu matches.
 
 ### If the host was deployed by copying files instead of cloning
 

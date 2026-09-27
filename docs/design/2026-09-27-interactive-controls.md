@@ -20,8 +20,8 @@ message, and every command available as a `/` command alongside `!`.
 ### `utils/controls.py` — shared playback actions
 
 Pure functions over `Optional[MusicPlayer]` returning an `Outcome(ok, message)`:
-`pause`, `resume`, `toggle_pause`, `skip`, `previous`, `shuffle`, `set_loop`,
-`cycle_loop`. They hold the wording ("Nothing is playing.", "Skipped ⏭") in one
+`pause`, `resume`, `skip`, `previous`, `shuffle`, `set_loop`, `cycle_loop`,
+`stop`. They hold the wording ("Nothing is playing.", "Skipped ⏭") in one
 place. Commands and buttons both call them and differ only in how they deliver
 the result.
 
