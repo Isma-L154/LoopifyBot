@@ -13,6 +13,7 @@ disconnected from voice by someone else.
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from discord.ext import commands
 
 from cogs.music import Music, MAX_QUERY_LEN, _is_playlist_url
 from cogs.effects import EFFECTS, Effects
@@ -27,6 +28,8 @@ def ctx(fake_guild):
     c.voice_client = None
     c.author = MagicMock()
     c.typing = MagicMock(return_value=AsyncMock())
+    c.defer = AsyncMock()
+    c.interaction = None            # invoked as `!command` unless a test says so
     return c
 
 
@@ -120,17 +123,22 @@ async def test_stop_with_no_player_and_no_voice_still_confirms(music_cog, ctx):
 
 # -- out-of-range and oversized input ----------------------------------
 
-@pytest.mark.parametrize("vol", [-1, 101, 1000])
-async def test_volume_out_of_range_is_rejected(music_cog, ctx, vol):
-    await Music.volume.callback(music_cog, ctx, vol)
-    assert "between 0 and 100" in sent_text(ctx)
+async def convert_volume(ctx, raw: str):
+    """Run the volume argument through its converter, as `!volume <raw>` would."""
+    param = Music.volume.clean_params["vol"]
+    return await commands.run_converters(ctx, param.converter, raw, param)
+
+
+@pytest.mark.parametrize("vol", ["-1", "101", "1000"])
+async def test_volume_out_of_range_is_rejected(ctx, vol):
+    with pytest.raises(commands.RangeError):
+        await convert_volume(ctx, vol)
 
 
 @pytest.mark.parametrize("vol", [0, 50, 100])
-async def test_volume_boundaries_are_accepted(music_cog, ctx, vol):
+async def test_volume_boundaries_are_accepted(ctx, vol):
     """0 and 100 are valid - an off-by-one here would reject mute and max."""
-    await Music.volume.callback(music_cog, ctx, vol)
-    assert "between 0 and 100" not in sent_text(ctx)
+    assert await convert_volume(ctx, str(vol)) == vol
 
 
 async def test_loop_rejects_an_unknown_mode(music_cog, ctx):
@@ -205,7 +213,7 @@ async def test_effect_changes_are_throttled_per_guild(effects_cog, ctx):
 
 
 async def test_current_effect_reports_none_when_idle(effects_cog, ctx):
-    await Effects.current_effect.callback(effects_cog, ctx)
+    await Effects.effect.callback(effects_cog, ctx)
     assert "none" in sent_text(ctx).lower()
 
 
@@ -311,3 +319,74 @@ async def test_play_copes_with_the_author_leaving_voice_mid_command(music_cog, c
         await Music.play.callback(music_cog, ctx, query="bohemian rhapsody")
     assert "voice channel" in sent_text(ctx)
     search.assert_not_awaited()
+
+
+# -- slash invocation -----------------------------------------------------
+
+async def test_play_defers_before_any_slow_work(music_cog, ctx):
+    """Joining voice alone can outlast Discord's three seconds to answer."""
+    ctx.author.voice = None
+    await Music.play.callback(music_cog, ctx, query="bohemian rhapsody")
+    ctx.defer.assert_awaited_once()
+
+
+async def test_slash_play_on_an_idle_player_still_answers(music_cog, ctx, player, track_factory):
+    """Now Playing goes to the channel; the interaction needs a reply of its own."""
+    ctx.interaction = MagicMock()
+    await music_cog._enqueue(ctx, player, [track_factory("Song")], None)
+    assert "Starting" in sent_text(ctx) and "Song" in sent_text(ctx)
+
+
+async def test_prefix_play_on_an_idle_player_leaves_it_to_now_playing(
+        music_cog, ctx, player, track_factory):
+    await music_cog._enqueue(ctx, player, [track_factory("Song")], None)
+    ctx.send.assert_not_awaited()
+
+
+async def test_failures_are_private_under_slash(music_cog, ctx):
+    await Music.skip.callback(music_cog, ctx)
+    assert ctx.send.await_args.kwargs["ephemeral"] is True
+
+
+async def test_play_suggests_search_terms(music_cog):
+    music_cog._session = MagicMock()
+    with patch("cogs.music.suggestions.fetch",
+               new=AsyncMock(return_value=["bohemian rhapsody"])):
+        choices = await Music._suggest(music_cog, MagicMock(), "bohem")
+    assert [c.value for c in choices] == ["bohemian rhapsody"]
+
+
+async def test_no_suggestions_before_the_cog_has_loaded(music_cog):
+    assert await Music._suggest(music_cog, MagicMock(), "bohem") == []
+
+
+# -- /effect <name> ---------------------------------------------------------
+
+async def test_effect_by_name_applies_it(effects_cog, ctx):
+    ctx.author.voice.channel = ctx.voice_client
+    with patch.object(effects_cog, "_switch_to", new=AsyncMock()) as switch:
+        await Effects.effect.callback(effects_cog, ctx, "Nightcore")
+    name, flt, _label, rate = switch.await_args.args[1:]
+    assert name == "nightcore" and flt == EFFECTS["nightcore"].filter
+    assert rate == EFFECTS["nightcore"].rate
+
+
+async def test_an_unknown_effect_name_is_refused(effects_cog, ctx):
+    await Effects.effect.callback(effects_cog, ctx, "banana")
+    assert "Unknown effect" in sent_text(ctx)
+
+
+async def test_applying_by_name_still_needs_the_same_voice_channel(effects_cog, ctx):
+    ctx.author.voice = None
+    with patch.object(effects_cog, "_switch_to", new=AsyncMock()) as switch:
+        await Effects.effect.callback(effects_cog, ctx, "bass")
+    switch.assert_not_awaited()
+    assert "voice channel" in sent_text(ctx)
+
+
+async def test_effects_list_under_slash_points_at_effect(effects_cog, ctx):
+    ctx.clean_prefix = "/"
+    ctx.interaction = MagicMock()
+    await Effects.list_effects.callback(effects_cog, ctx)
+    text = sent_text(ctx)
+    assert "/effect" in text and "`/bass`" not in text

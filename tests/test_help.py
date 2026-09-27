@@ -33,13 +33,14 @@ def help_text(embed: discord.Embed) -> str:
 
 async def test_every_registered_command_is_documented(bot):
     text = help_text(build(bot, PREFIX))
-    undocumented = [c.name for c in bot.commands if f"{PREFIX}{c.name}" not in text]
+    undocumented = [c.name for c in bot.commands
+                    if not c.hidden and f"{PREFIX}{c.name}" not in text]
     assert undocumented == [], f"commands missing from !help: {undocumented}"
 
 
 async def test_effect_is_documented(bot):
     """The exact command the hardcoded help had silently dropped."""
-    assert f"{PREFIX}effect`" in help_text(build(bot, PREFIX))
+    assert f"{PREFIX}effect [name]`" in help_text(build(bot, PREFIX))
 
 
 async def test_every_alias_is_documented(bot):
@@ -84,3 +85,8 @@ def test_describe_renders_arguments_and_aliases():
     assert "`!move <from_pos> <to_pos>`" in line
     assert "`!mv`" in line
     assert "Move a track." in line
+
+
+async def test_the_owner_sync_command_stays_out_of_help(bot):
+    assert bot.get_command("sync").hidden
+    assert f"{PREFIX}sync" not in help_text(build(bot, PREFIX))

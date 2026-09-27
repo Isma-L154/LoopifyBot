@@ -58,6 +58,7 @@ def build(bot: commands.Bot, prefix: str) -> discord.Embed:
             embed.add_field(name=name, value=value, inline=False)
     embed.set_footer(
         text=f"Tip: {prefix}play takes YouTube/SoundCloud searches "
-             f"(prefix with sc:) and most links yt-dlp supports."
+             f"(prefix with sc:) and most links yt-dlp supports. "
+             f"Every command also works as /command."
     )
     return embed

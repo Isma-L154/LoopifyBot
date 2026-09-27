@@ -14,11 +14,17 @@ consistent as commands are added.
 import logging
 
 import discord
+from discord import app_commands
 from discord.ext import commands
 
 from utils.embeds import error_embed
 
 log = logging.getLogger("loopify.errors")
+
+# What discord.py wraps a command's real exception in. Under `/` it is wrapped
+# twice: HybridCommandError around app_commands.CommandInvokeError around it.
+_WRAPPERS = (commands.CommandInvokeError, commands.HybridCommandError,
+             app_commands.CommandInvokeError)
 
 
 def usage(ctx: commands.Context) -> str:
@@ -41,6 +47,8 @@ def _input_detail(error: commands.UserInputError) -> str:
         return f"Missing the `{error.param.name}` argument."
     if isinstance(error, commands.TooManyArguments):
         return "That command takes fewer arguments than you gave it."
+    if isinstance(error, commands.RangeError):
+        return f"That value must be between {error.minimum} and {error.maximum}."
     if isinstance(error, commands.BadArgument):
         return "One of those arguments isn't the right type."
     return "I couldn't make sense of that."
@@ -48,8 +56,8 @@ def _input_detail(error: commands.UserInputError) -> str:
 
 async def handle(ctx: commands.Context, error: Exception) -> None:
     """Reply to the user, or log, depending on what went wrong."""
-    # discord.py wraps exceptions raised inside a command body.
-    error = getattr(error, "original", error)
+    while isinstance(error, _WRAPPERS):
+        error = error.original
 
     if isinstance(error, commands.CommandNotFound):
         return
@@ -81,6 +89,7 @@ async def handle(ctx: commands.Context, error: Exception) -> None:
 
 async def _reply(ctx: commands.Context, message: str) -> None:
     try:
-        await ctx.send(embed=error_embed(message))
+        # Under `/` only the person who erred sees it; under `!` it is ignored.
+        await ctx.send(embed=error_embed(message), ephemeral=True)
     except discord.HTTPException as e:
         log.debug("Could not report an error to the channel: %s", e)

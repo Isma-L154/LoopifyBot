@@ -14,9 +14,10 @@ from services.media import Track
 # Genius fallback then built a Cog instead of a result and raised TypeError,
 # which the command reported as nothing at all.
 from services.synced_lyrics import Line, index_at, search_terms
-from utils.context import GuildContext
+from utils import now_playing_view
+from utils.context import GuildContext, hybrid_command
 from utils.embeds import (error_embed, info_embed, lyrics_embed, lyrics_pages,
-                          synced_lyrics_embed)
+                          success_embed, synced_lyrics_embed)
 from utils.player import MusicPlayer, players
 
 LyricsResult = synced_lyrics.Lyrics
@@ -178,8 +179,10 @@ class Lyrics(commands.Cog, name="\U0001f3a4 Lyrics"):
     async def cog_load(self) -> None:
         # One session for the cog. Building one per request is what leaked in #34.
         self._session = aiohttp.ClientSession()
+        now_playing_view.set_lyrics_provider(self.show_current)
 
     async def cog_unload(self) -> None:
+        now_playing_view.set_lyrics_provider(None)
         for guild_id in list(self._following):
             self.stop_following(guild_id)
         if self._session is not None:
@@ -241,21 +244,22 @@ class Lyrics(commands.Cog, name="\U0001f3a4 Lyrics"):
         if not task.done():
             task.cancel()
 
-    async def _follow(self, ctx: GuildContext, player: MusicPlayer,
+    async def _follow(self, dest: discord.abc.Messageable, player: MusicPlayer,
                       lyrics: LyricsResult) -> None:
         """Post the live message and start keeping it up to date."""
-        self.stop_following(ctx.guild.id)      # one per guild; the newest wins
+        guild_id = player.guild.id
+        self.stop_following(guild_id)          # one per guild; the newest wins
         index = index_at(lyrics.lines, player.position)
-        message = await ctx.send(
+        message = await dest.send(
             embed=synced_lyrics_embed(
                 lyrics.title, lyrics.artist, lyrics.lines, index,
                 player.position,
                 player.current.get("duration") if player.current else None),
-            view=FollowControls(lambda: self.stop_following(ctx.guild.id)),
+            view=FollowControls(lambda: self.stop_following(guild_id)),
         )
         follower = LyricsFollower(message, player, self._for_track)
-        task = self.bot.loop.create_task(self._run_follower(ctx.guild.id, follower))
-        self._following[ctx.guild.id] = (follower, task)
+        task = self.bot.loop.create_task(self._run_follower(guild_id, follower))
+        self._following[guild_id] = (follower, task)
 
     async def _run_follower(self, guild_id: int, follower: LyricsFollower) -> None:
         try:
@@ -267,13 +271,51 @@ class Lyrics(commands.Cog, name="\U0001f3a4 Lyrics"):
         finally:
             self._following.pop(guild_id, None)
 
+    # -- Showing what was found ---------------------------------------
+
+    async def _present(self, dest: discord.abc.Messageable, found: LyricsResult,
+                       player: Optional[MusicPlayer]) -> None:
+        """
+        Post lyrics that were found. ``player`` is given when they are the
+        playing track's, and only then can they be followed: a lyric needs a
+        clock, and a search result has none.
+        """
+        if found.instrumental:
+            await dest.send(embed=info_embed(
+                "\U0001f3b5 Instrumental",
+                f"**{found.title}** has no lyrics to show."
+            ))
+            return
+        if found.synced and player and player.current:
+            return await self._follow(dest, player, found)
+
+        note = "not synced - showing the full lyrics" if player else ""
+        view = LyricsPages(found.title, found.artist, found.plain, note)
+        if view.total > 1:
+            await dest.send(embed=view.embed(), view=view)
+        else:
+            await dest.send(embed=view.embed())
+
+    async def show_current(self, dest: discord.abc.Messageable,
+                           player: MusicPlayer) -> bool:
+        """Post the playing track's lyrics. False when there are none to post."""
+        if not player.current:
+            return False
+        found = await self._for_track(player.current)
+        if found is None:
+            return False
+        await self._present(dest, found, player)
+        return True
+
     # -- The command ---------------------------------------------------
 
-    @commands.command(aliases=["ly"])
+    @hybrid_command(aliases=["ly"])
     async def lyrics(self, ctx: GuildContext, *,
                      query: Optional[str] = None) -> None:
         """Follow the lyrics of the current song, or look a song up."""
-        async with ctx.typing():
+        # Ephemeral under `/`: the lyrics themselves go to the channel (below),
+        # so all this interaction ever shows is an error or an acknowledgement.
+        async with ctx.typing(ephemeral=True):
             player = players.get(ctx.guild.id)
             if query:
                 title = self._split_query(query)[0]
@@ -285,32 +327,23 @@ class Lyrics(commands.Cog, name="\U0001f3a4 Lyrics"):
                 await ctx.send(embed=error_embed(
                     f"Nothing is playing. Provide a song name: "
                     f"`{ctx.clean_prefix}lyrics <title>`"
-                ))
+                ), ephemeral=True)
                 return
 
             if found is None:
                 await ctx.send(embed=error_embed(
                     f"Couldn't find lyrics for **{title}**."
-                ))
+                ), ephemeral=True)
                 return
-            if found.instrumental:
-                await ctx.send(embed=info_embed(
-                    "\U0001f3b5 Instrumental",
-                    f"**{found.title}** has no lyrics to show."
-                ))
+            if ctx.interaction is None:
+                await self._present(ctx, found, None if query else player)
                 return
-
-            # Only the playing track can be followed: a lyric needs a clock, and
-            # a search result has none.
-            if found.synced and not query and player and player.current:
-                return await self._follow(ctx, player, found)
-
-            note = "" if query else "not synced - showing the full lyrics"
-            view = LyricsPages(found.title, found.artist, found.plain, note)
-            if view.total > 1:
-                await ctx.send(embed=view.embed(), view=view)
-            else:
-                await ctx.send(embed=view.embed())
+            # A reply to an interaction can only be edited with its token, which
+            # expires after 15 minutes; the live message is edited for as long
+            # as the music plays. Posted to the channel, it is the bot's own.
+            await self._present(ctx.channel, found, None if query else player)
+            await ctx.send(embed=success_embed("🎤 Lyrics posted."),
+                           ephemeral=True)
 
 
 async def setup(bot: commands.Bot) -> None:

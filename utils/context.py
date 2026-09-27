@@ -11,7 +11,7 @@ checker so. It exists only for type checking — at runtime it *is*
 without a ``None`` test the check has already made impossible.
 """
 
-from typing import TYPE_CHECKING, Any, Optional
+from typing import TYPE_CHECKING, Any, Callable, Coroutine, Optional
 
 import discord
 from discord.ext import commands
@@ -29,8 +29,18 @@ if TYPE_CHECKING:
 
         @property
         def voice_client(self) -> Optional[discord.VoiceClient]: ...
+
+    # mypy cannot solve commands.hybrid_command's union of Concatenate callback
+    # types when the callback is a cog method (it can for a plain function, and
+    # pyright can for both). This is the same decorator with a signature mypy
+    # accepts; at runtime it is commands.hybrid_command itself.
+    def hybrid_command(
+        name: str = ..., **attrs: Any,
+    ) -> Callable[[Callable[..., Coroutine[Any, Any, None]]],
+                  commands.HybridCommand[Any, ..., None]]: ...
 else:
     GuildContext = commands.Context
+    hybrid_command = commands.hybrid_command
 
 
 async def guild_only(ctx: commands.Context[Any]) -> bool:
