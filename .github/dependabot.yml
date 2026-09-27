@@ -1,0 +1,24 @@
+version: 2
+updates:
+  # Picks up requirements.txt and requirements-dev.txt.
+  - package-ecosystem: pip
+    directory: /
+    schedule:
+      interval: weekly
+    ignore:
+      # Deliberately unpinned and kept current on the server by a daily timer
+      # (deploy/update-ytdlp.sh). Its floor only moves when YouTube requires a
+      # newer build, which is a judgement no weekly bump can make.
+      - dependency-name: yt-dlp
+      # Capped below 1.6 by discord.py 2.7.1; see requirements.txt.
+      - dependency-name: PyNaCl
+        versions: [">=1.6"]
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      # One PR for all action bumps rather than one per action.
+      actions:
+        patterns: ["*"]

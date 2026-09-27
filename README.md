@@ -93,7 +93,7 @@ No installation required — the bot is hosted and always online.
 ## 🛠️ Self-hosting
 
 ### Requirements
-- Python 3.11+
+- Python 3.12+
 - FFmpeg on your PATH
 - A Discord bot token with the **Message Content** intent enabled — the only
   privileged intent the bot asks for
@@ -131,7 +131,7 @@ filters, since a wrong filter string looks perfectly reasonable and only shows u
 as the wrong playback speed. Those skip automatically if FFmpeg is not installed.
 
 CI runs the lint, the type check and the tests on every push and pull request,
-against Python 3.11 and 3.12.
+with the tests running on Python 3.12 (what the server runs) and 3.14 (the newest).
 
 ### Deploy to a server
 See **[deploy/README.md](deploy/README.md)** for the full walkthrough:
