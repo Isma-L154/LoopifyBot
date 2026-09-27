@@ -1,7 +1,7 @@
 # Pinned so a deploy today installs what was actually tested. Bump these
 # deliberately and re-run the suite; do not let them float.
 discord.py[voice]==2.7.1
-lyricsgenius==3.12.2
+lyricsgenius==3.14.0
 # Capped below 1.6 by discord.py 2.7.1. pip-audit flags 1.5.0 for
 # PYSEC-2026-1448 / PYSEC-2026-3002, which are in libsodium's ed25519 point
 # validation — voice only uses its secretbox/AEAD ciphers, so the bot never
