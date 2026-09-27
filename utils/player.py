@@ -396,9 +396,7 @@ class MusicPlayer:
 
                 if not silent:
                     await self.announcer.now_playing(
-                        track, track.get("requester") or self.guild.me,
-                        self.loop_mode,
-                    )
+                        self, track, track.get("requester") or self.guild.me)
 
                 await self._wait_for_end(track)
                 # Measured from the spawn, not from _start_ts, which is
@@ -523,6 +521,9 @@ class MusicPlayer:
             asyncio.ensure_future(vc.disconnect(force=True))
         if self._task and not self._task.done():
             self._task.cancel()
+        # destroy() is sync, so the Now Playing buttons are greyed out in a
+        # task of their own; left live, they would act on a dead player.
+        self.bot.loop.create_task(self.announcer.retire())
         if self._on_destroy is not None:
             self._on_destroy(self.guild.id)
 
