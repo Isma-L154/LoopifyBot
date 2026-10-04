@@ -4,5 +4,5 @@
 pytest>=9.1.1
 pytest-asyncio>=1.4.0
 # Pinned: a new release of either can start failing CI on unchanged code.
-ruff==0.16.8
+ruff==0.16.9
 mypy==2.3.1
