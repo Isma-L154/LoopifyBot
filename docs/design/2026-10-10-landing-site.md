@@ -34,8 +34,8 @@ crawlable and unfurl with a card.
 | `--amber` | `#ff8a1f` | the one action colour: buttons, section labels, active keys |
 | `--lcd` | `#7dff9b` on `#0b1a0f` | only inside LCD screens |
 
-- **Chakra Petch** 500/600 for headings and labels (uppercase), **IBM Plex
-  Sans** 400/500/600 for text, **IBM Plex Mono** 400 for commands, **VT323** for
+- **Chakra Petch** 600 for headings and labels (uppercase), **IBM Plex
+  Sans** (one variable file) for text, **IBM Plex Mono** 400 for commands, **VT323** for
   LCD screens. **Righteous** only for the LoopifyBot wordmark. All five are SIL
   Open Font License, served as woff2 from `fonts/`.
 - Icons are inline SVG. No emoji as icons.
@@ -67,9 +67,10 @@ crawlable and unfurl with a card.
    one after another.
 6. **04 · Troubleshooting** (`#troubleshooting`, linked as FAQ): native
    `<details>` entries labelled like error codes — E-01 joined but silent;
-   E-02 a YouTube song fails and is skipped (try `sc:`); E-03 what data it
-   keeps (none — no database); E-04 free and uptime (self-hosted, best effort);
-   E-05 running your own copy (link to the repository).
+   E-02 a YouTube song fails and is skipped (try `sc:`); E-03 the `/`
+   commands don't show up; E-04 what data it keeps (none — no database);
+   E-05 free and uptime (self-hosted, best effort); E-06 running your own copy
+   (link to the repository).
 7. **Footer**: *LOOPIFY · MIT LICENSE*, GitHub, Report a bug.
 
 ### The live deck

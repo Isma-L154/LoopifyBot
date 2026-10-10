@@ -190,7 +190,8 @@ h1, h2, h3 { margin: 0; font-family: var(--display); font-weight: 600; text-tran
 .knob[aria-pressed="true"] .dial::after { transform: rotate(120deg); }
 
 .plate {
-  position: absolute; left: 22px; bottom: -32px; margin: 0;
+  position: absolute; left: 22px; right: 22px; bottom: -32px; margin: 0;
+  white-space: nowrap; overflow: hidden;
   font: 600 0.65rem var(--display); letter-spacing: 0.2em; color: var(--faint);
 }
 
@@ -272,11 +273,10 @@ h2 { font-size: clamp(1.6rem, 3.4vw, 2rem); margin-bottom: 24px; }
 @media (max-width: 560px) { .faq details p { margin-left: 0; } }
 
 /* Footer */
-.foot {
+.foot { max-width: 1200px; margin: 72px auto 0; padding: 0 var(--gutter) env(safe-area-inset-bottom, 0px); }
+.foot-in {
   display: flex; flex-wrap: wrap; gap: 8px 24px; align-items: center;
-  max-width: 1200px; margin: 72px auto 0;
-  padding: 22px var(--gutter) calc(22px + env(safe-area-inset-bottom, 0px));
-  border-top: 1px solid var(--line); color: var(--muted); font-size: 0.875rem;
+  padding: 22px 0; border-top: 1px solid var(--line); color: var(--muted); font-size: 0.875rem;
 }
 .foot a { padding: 10px 0; }
 .foot-plate { margin-right: auto; font: 600 0.7rem var(--display); letter-spacing: 0.12em; color: var(--faint); }

@@ -1,7 +1,7 @@
 {
   "$schema": "https://unpkg.com/wrangler@4.141.0/config-schema.json",
   "name": "loopify-site",
-  "compatibility_date": "2026-10-10",
+  "compatibility_date": "2026-10-01",
   "assets": {
     "directory": "./public",
     // Unknown paths get public/404.html with a real 404 status, so Search

@@ -200,27 +200,27 @@
         <h2 id="troubleshooting-title">If something's off</h2>
         <div class="faq">
           <details>
-            <summary><span class="code" aria-hidden="true">E-01</span>The bot joined, but I hear nothing</summary>
+            <summary><span class="code" aria-hidden="true">E-01</span><span>The bot joined, but I hear nothing</span></summary>
             <p>Check that you haven't muted it or turned its user volume down on your side (right-click the bot, then User Volume), and that <code>/volume</code> isn't at 0. If an effect sounds wrong, <code>/reset</code> removes it.</p>
           </details>
           <details>
-            <summary><span class="code" aria-hidden="true">E-02</span>A YouTube song fails and gets skipped</summary>
+            <summary><span class="code" aria-hidden="true">E-02</span><span>A YouTube song fails and gets skipped</span></summary>
             <p>YouTube blocks some videos for bots. LoopifyBot says so in the channel and moves on to the next song. Try the same search on SoundCloud: <code>/play sc: song name</code>.</p>
           </details>
           <details>
-            <summary><span class="code" aria-hidden="true">E-03</span>The <code>/</code> commands don't show up</summary>
+            <summary><span class="code" aria-hidden="true">E-03</span><span>The <code>/</code> commands don't show up</span></summary>
             <p>Give Discord a minute after adding the bot, then restart the Discord app. The <code>!</code> commands work straight away.</p>
           </details>
           <details>
-            <summary><span class="code" aria-hidden="true">E-04</span>Does it keep any of my data?</summary>
+            <summary><span class="code" aria-hidden="true">E-04</span><span>Does it keep any of my data?</span></summary>
             <p>No. There is no database: the queue lives in memory and is gone when the bot leaves. It reads the channel's messages only to spot <code>!</code> commands.</p>
           </details>
           <details>
-            <summary><span class="code" aria-hidden="true">E-05</span>Is it free? Is it always on?</summary>
+            <summary><span class="code" aria-hidden="true">E-05</span><span>Is it free? Is it always on?</span></summary>
             <p>Free, with nothing behind a paywall. It runs on a self-hosted server, so it is on most of the time, but there is no uptime guarantee.</p>
           </details>
           <details>
-            <summary><span class="code" aria-hidden="true">E-06</span>Can I run my own copy?</summary>
+            <summary><span class="code" aria-hidden="true">E-06</span><span>Can I run my own copy?</span></summary>
             <p>Yes. It is open source under the MIT license, and the <a href="https://github.com/Isma-L154/LoopifyBot">repository</a> explains how to run it on your own machine, a home server or AWS.</p>
           </details>
         </div>
@@ -229,9 +229,11 @@
   </main>
 
   <footer class="foot">
-    <span class="foot-plate">LOOPIFY · MIT LICENSE</span>
-    <a href="https://github.com/Isma-L154/LoopifyBot">GitHub</a>
-    <a href="https://github.com/Isma-L154/LoopifyBot/issues">Report a bug</a>
+    <div class="foot-in">
+      <span class="foot-plate">LOOPIFY · MIT LICENSE</span>
+      <a href="https://github.com/Isma-L154/LoopifyBot">GitHub</a>
+      <a href="https://github.com/Isma-L154/LoopifyBot/issues">Report a bug</a>
+    </div>
   </footer>
 </body>
 </html>

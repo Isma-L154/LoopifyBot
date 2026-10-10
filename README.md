@@ -1,8 +1,9 @@
 <div align="center">
 
-<img alt="LoopifyBot — music for your Discord voice channels" src="docs/brand/banner.png" width="880" />
+<img alt="LoopifyBot — a stereo for your voice channel" src="docs/brand/banner.png" width="880" />
 
 [![Tests](https://github.com/Isma-L154/LoopifyBot/actions/workflows/tests.yml/badge.svg)](https://github.com/Isma-L154/LoopifyBot/actions/workflows/tests.yml)
+[![Deploy site](https://github.com/Isma-L154/LoopifyBot/actions/workflows/deploy-site.yml/badge.svg)](https://github.com/Isma-L154/LoopifyBot/actions/workflows/deploy-site.yml)
 ![Python](https://img.shields.io/badge/Python-3.14-ff8a1f?logo=python&logoColor=white)
 ![discord.py](https://img.shields.io/badge/discord.py-2.7-ff8a1f?logo=discord&logoColor=white)
 ![FFmpeg](https://img.shields.io/badge/FFmpeg-audio-ff8a1f?logo=ffmpeg&logoColor=white)
@@ -13,7 +14,7 @@
 Plays YouTube, SoundCloud and direct links into a voice channel, with a shared
 queue, FFmpeg audio effects and lyrics that follow the song line by line.
 
-[Invite the bot](https://discord.com/oauth2/authorize?client_id=1411151372446863491&permissions=36784128&integration_type=0&scope=bot+applications.commands) · [Report a bug](https://github.com/Isma-L154/LoopifyBot/issues) · [Run it locally](#running-locally)
+[Website](https://loopify.cloudils.com/) · [Invite the bot](https://discord.com/oauth2/authorize?client_id=1411151372446863491&permissions=36784128&integration_type=0&scope=bot+applications.commands) · [Report a bug](https://github.com/Isma-L154/LoopifyBot/issues) · [Run it locally](#running-locally)
 
 </div>
 
@@ -115,11 +116,14 @@ flowchart LR
     ffmpeg --> voice["🔊 Discord voice"]
     cogs --> lrclib["🎤 LRCLIB<br/>synced lyrics"]
     cogs -.->|"fallback"| genius["📖 Genius<br/>optional"]
+    site["🌐 loopify.cloudils.com<br/>static site on Cloudflare"] -->|"Add to Discord"| user
 ```
 
 Discord commands land in the cogs (`cogs/`), which drive one `MusicPlayer` per
 server (`utils/player.py`). The cogs handle Discord and the player owns the
-queue. Calls to outside services live in `services/`.
+queue. Calls to outside services live in `services/`. The public page in
+`site/` is separate from the bot: plain HTML, CSS and JS with no build step,
+served by Cloudflare ([design notes](docs/design/2026-10-10-landing-site.md)).
 
 yt-dlp downloads the audio and writes it to stdout, and FFmpeg reads that pipe.
 Handing FFmpeg the YouTube URL directly gets a 403, because those URLs only
@@ -132,7 +136,7 @@ timings, and from Genius only when LRCLIB has nothing. YouTube's player
 changes often, so `yt-dlp` is the one dependency left unpinned; on a server a
 daily timer keeps it current (see [Deployment](#deployment)).
 
-**Stack:** Python 3.14 · discord.py 2.7 · yt-dlp · FFmpeg · aiohttp · lyricsgenius · systemd
+**Stack:** Python 3.14 · discord.py 2.7 · yt-dlp · FFmpeg · aiohttp · lyricsgenius · systemd · Cloudflare Workers (website)
 
 ## Running locally
 
@@ -142,6 +146,7 @@ daily timer keeps it current (see [Deployment](#deployment)).
 - FFmpeg on your `PATH`
 - A Discord bot token with the **Message Content** intent enabled, the only
   privileged intent the bot asks for
+- Node.js, only to preview the website or regenerate the banner
 
 ### Setup
 
@@ -189,7 +194,10 @@ Discord gateway and never calls yt-dlp. It covers:
 - the Now Playing buttons and the `/play` suggestions;
 - synced lyrics, the line-following message and the Genius fallback;
 - startup and shutdown, including that a login survives a DNS outage and that
-  the process stops within the time systemd allows.
+  the process stops within the time systemd allows;
+- the website: its command list matches the commands and aliases the bot
+  registers, it has nothing inline that its CSP would block, and every public
+  URL uses the custom domain (`tests/test_site.py`).
 
 A few tests render audio through **real FFmpeg** to check the speed of the
 pitch filters, because a wrong filter string looks fine and only shows up as
@@ -199,13 +207,22 @@ CI ([tests.yml](.github/workflows/tests.yml)) runs the lint, the type check and
 the tests on Python 3.14, which is both what the server runs and the newest
 release, on every push to `main` and every pull request.
 
-### Regenerating the banner
+### Previewing the website
 
-The banner is drawn in HTML from [docs/brand/banner.html](docs/brand/banner.html):
+```bash
+cd site
+npx -y wrangler@4.141.0 dev       # http://localhost:8787, with the real _headers and 404 page
+```
+
+### Regenerating the banner and the share card
+
+Both are drawn in HTML from [docs/brand/banner.html](docs/brand/banner.html),
+which lays itself out in viewport units, so one file gives both sizes:
 
 ```bash
 npx playwright install chromium   # once per machine
 npx -y playwright@1.63.0 screenshot --viewport-size "1280,640" "file:///<absolute path>/docs/brand/banner.html" docs/brand/banner.png
+npx -y playwright@1.63.0 screenshot --viewport-size "1200,630" "file:///<absolute path>/docs/brand/banner.html" site/public/og.png
 ```
 
 ## Deployment
@@ -229,8 +246,20 @@ is still supported and documented, with that caveat.
 - `deploy/launch_ec2.sh` launches a `t4g.micro` that accepts SSH only from your
   IP.
 
-The only secret is `.env`, created by hand on the host; nothing is deployed
-from CI.
+The bot's only secret is `.env`, created by hand on the host; the bot is never
+deployed from CI.
+
+### Website
+
+[deploy-site.yml](.github/workflows/deploy-site.yml) publishes `site/` to
+`https://loopify.cloudils.com/` as an assets-only Cloudflare Worker
+([site/wrangler.jsonc](site/wrangler.jsonc)). It runs only after the Tests
+workflow passes on a push to `main`, never for pull requests. It needs two
+repository secrets: `CLOUDFLARE_API_TOKEN` (the **Edit Cloudflare Workers**
+template, scoped to the account and the `cloudils.com` zone) and
+`CLOUDFLARE_ACCOUNT_ID`. The first deploy creates the Worker, the DNS record
+and the certificate for the subdomain. The `workers.dev` and preview URLs are
+off, so the page exists on one host only.
 
 ## Security
 
@@ -260,8 +289,16 @@ from CI.
   [requirements.txt](requirements.txt)), Dependabot proposes weekly updates for
   pip and GitHub Actions, and CI runs with `contents: read` permissions.
 
-CORS, Row Level Security and a Content Security Policy do not apply: the bot
-serves no HTTP and keeps no database.
+- **Website headers:** [site/public/_headers](site/public/_headers) sends a CSP
+  of `default-src 'self'` with no `unsafe-inline` or `unsafe-eval`, plus
+  `frame-ancestors 'none'`, `object-src 'none'`, `base-uri 'self'`, HSTS,
+  `nosniff` and `Referrer-Policy`. Fonts are self-hosted, so the page loads
+  nothing from third parties, and `tests/test_site.py` fails on any inline
+  script, style or event handler the CSP would block. The deploy action is
+  pinned to a commit because it receives the Cloudflare token.
+
+CORS and Row Level Security do not apply: the website is static with no API,
+and nothing keeps a database.
 
 ## License
 

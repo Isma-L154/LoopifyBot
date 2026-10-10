@@ -42,3 +42,6 @@ CLAUDE.md
 
 # Local design-mockup sessions.
 .superpowers/
+
+# Local state from `wrangler dev` (site/).
+.wrangler/
