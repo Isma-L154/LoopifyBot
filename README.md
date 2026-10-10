@@ -41,8 +41,9 @@ queue, FFmpeg audio effects and lyrics that follow the song line by line.
 ## Commands
 
 Every command below also works as a slash command (`/play`, `/skip`,
-`/effect`…). Aliases (`!p`, `!q`, `!bass`…) are `!`-only; under `/` the effects
-are picked from `/effect`.
+`/effect`…), except the effect shortcuts (`!bass`, `!nightcore`…): under `/`
+the effects are picked from `/effect`. Aliases (`!p`, `!q`, `!np`…) are
+`!`-only too.
 
 Each **Now Playing** message carries buttons for anyone in the bot's voice
 channel: ⏮ ⏯ ⏭ ⏹ on the first row, 🔁 (cycle loop) 🔀 (shuffle) 📜 (queue,
