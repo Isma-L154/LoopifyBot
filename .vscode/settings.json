@@ -1,0 +1,21 @@
+{
+  // Windows layout (Scripts\). On Linux or macOS VS Code still finds .venv
+  // on its own; this only pins the choice where development happens.
+  "python.defaultInterpreterPath": "${workspaceFolder}/.venv/Scripts/python.exe",
+
+  "python.testing.pytestEnabled": true,
+  "python.testing.unittestEnabled": false,
+
+  // Run the ruff and mypy installed in .venv, pinned in requirements-dev.txt,
+  // instead of the copies bundled with the extensions, so the editor reports
+  // exactly what CI reports.
+  "ruff.importStrategy": "fromEnvironment",
+  "mypy-type-checker.importStrategy": "fromEnvironment",
+
+  "files.exclude": {
+    "**/__pycache__": true,
+    ".mypy_cache": true,
+    ".pytest_cache": true,
+    ".ruff_cache": true
+  }
+}
