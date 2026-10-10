@@ -147,9 +147,13 @@ site/
 
 `site/public/_headers` applies to every path:
 
-- `Content-Security-Policy: default-src 'self'; img-src 'self' data:;
-  object-src 'none'; base-uri 'self'; form-action 'none';
-  frame-ancestors 'none'` — no `unsafe-inline`, no `unsafe-eval`.
+- `Content-Security-Policy: default-src 'self'; script-src 'self'
+  https://static.cloudflareinsights.com; connect-src 'self'
+  https://cloudflareinsights.com; img-src 'self' data:; object-src 'none';
+  base-uri 'self'; form-action 'none'; frame-ancestors 'none'` — no
+  `unsafe-inline`, no `unsafe-eval`. The two cloudflareinsights hosts are
+  Cloudflare Web Analytics, auto-installed for the whole zone; the owner chose
+  to keep its cookieless visit counts rather than exclude the host.
 - `Strict-Transport-Security: max-age=31536000`
 - `X-Content-Type-Options: nosniff`
 - `Referrer-Policy: strict-origin-when-cross-origin`

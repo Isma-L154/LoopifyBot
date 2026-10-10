@@ -292,9 +292,10 @@ off, so the page exists on one host only.
 - **Website headers:** [site/public/_headers](site/public/_headers) sends a CSP
   of `default-src 'self'` with no `unsafe-inline` or `unsafe-eval`, plus
   `frame-ancestors 'none'`, `object-src 'none'`, `base-uri 'self'`, HSTS,
-  `nosniff` and `Referrer-Policy`. Fonts are self-hosted, so the page loads
-  nothing from third parties, and `tests/test_site.py` fails on any inline
-  script, style or event handler the CSP would block. The deploy job pins
+  `nosniff` and `Referrer-Policy`. Fonts are self-hosted; the only outside
+  origins the CSP allows are Cloudflare Web Analytics' beacon and endpoint
+  (cookieless, injected by Cloudflare for the zone). `tests/test_site.py`
+  fails on any inline script, style or event handler the CSP would block. The deploy job pins
   its actions to commits because it holds the Cloudflare token.
 
 CORS and Row Level Security do not apply: the website is static with no API,

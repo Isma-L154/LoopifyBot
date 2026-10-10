@@ -1,9 +1,11 @@
 # Applied by Cloudflare to every static response; this file is not served.
 # The page has no inline scripts or styles (tests/test_site.py enforces it), so
 # the CSP needs neither 'unsafe-inline' nor 'unsafe-eval'. img-src allows data:
-# for the SVG icons browsers may inline.
+# for the SVG icons browsers may inline. The two cloudflareinsights hosts are
+# Cloudflare Web Analytics, which Cloudflare injects for the whole zone: the
+# beacon script and the endpoint it reports to.
 /*
-  Content-Security-Policy: default-src 'self'; img-src 'self' data:; object-src 'none'; base-uri 'self'; form-action 'none'; frame-ancestors 'none'
+  Content-Security-Policy: default-src 'self'; script-src 'self' https://static.cloudflareinsights.com; connect-src 'self' https://cloudflareinsights.com; img-src 'self' data:; object-src 'none'; base-uri 'self'; form-action 'none'; frame-ancestors 'none'
   Strict-Transport-Security: max-age=31536000
   X-Content-Type-Options: nosniff
   Referrer-Policy: strict-origin-when-cross-origin
