@@ -3,7 +3,6 @@
 <img alt="LoopifyBot — a stereo for your voice channel" src="docs/brand/banner.png" width="880" />
 
 [![Tests](https://github.com/Isma-L154/LoopifyBot/actions/workflows/tests.yml/badge.svg)](https://github.com/Isma-L154/LoopifyBot/actions/workflows/tests.yml)
-[![Deploy site](https://github.com/Isma-L154/LoopifyBot/actions/workflows/deploy-site.yml/badge.svg)](https://github.com/Isma-L154/LoopifyBot/actions/workflows/deploy-site.yml)
 ![Python](https://img.shields.io/badge/Python-3.14-ff8a1f?logo=python&logoColor=white)
 ![discord.py](https://img.shields.io/badge/discord.py-2.7-ff8a1f?logo=discord&logoColor=white)
 ![FFmpeg](https://img.shields.io/badge/FFmpeg-audio-ff8a1f?logo=ffmpeg&logoColor=white)
@@ -205,7 +204,8 @@ the wrong playback speed. They skip if FFmpeg is not installed.
 
 CI ([tests.yml](.github/workflows/tests.yml)) runs the lint, the type check and
 the tests on Python 3.14, which is both what the server runs and the newest
-release, on every push to `main` and every pull request.
+release, on every push to `main` and every pull request. On `main` it then
+deploys the website (see [Deployment](#deployment)).
 
 ### Previewing the website
 
@@ -251,10 +251,10 @@ deployed from CI.
 
 ### Website
 
-[deploy-site.yml](.github/workflows/deploy-site.yml) publishes `site/` to
-`https://loopify.cloudils.com/` as an assets-only Cloudflare Worker
-([site/wrangler.jsonc](site/wrangler.jsonc)). It runs only after the Tests
-workflow passes on a push to `main`, never for pull requests. It needs two
+The `deploy-site` job in [tests.yml](.github/workflows/tests.yml) publishes
+`site/` to `https://loopify.cloudils.com/` as an assets-only Cloudflare Worker
+([site/wrangler.jsonc](site/wrangler.jsonc)). It runs only on a push to `main`,
+after `lint` and `pytest` pass, and never for pull requests. It needs two
 repository secrets: `CLOUDFLARE_API_TOKEN` (the **Edit Cloudflare Workers**
 template, scoped to the account and the `cloudils.com` zone) and
 `CLOUDFLARE_ACCOUNT_ID`. The first deploy creates the Worker, the DNS record
@@ -294,8 +294,8 @@ off, so the page exists on one host only.
   `frame-ancestors 'none'`, `object-src 'none'`, `base-uri 'self'`, HSTS,
   `nosniff` and `Referrer-Policy`. Fonts are self-hosted, so the page loads
   nothing from third parties, and `tests/test_site.py` fails on any inline
-  script, style or event handler the CSP would block. The deploy action is
-  pinned to a commit because it receives the Cloudflare token.
+  script, style or event handler the CSP would block. The deploy job pins
+  its actions to commits because it holds the Cloudflare token.
 
 CORS and Row Level Security do not apply: the website is static with no API,
 and nothing keeps a database.

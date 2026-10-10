@@ -159,11 +159,14 @@ so CORS, input validation, rate limiting and RLS do not apply to it.
 
 ## Deployment
 
-`.github/workflows/deploy-site.yml` runs on `workflow_run` when `Tests`
-completes on `main`, and deploys only if it succeeded. It never runs for pull
-requests. The job uses the `production` environment, `permissions: contents:
-read`, its own `concurrency` group without cancellation, and
-`cloudflare/wrangler-action` with a pinned Wrangler version.
+A `deploy-site` job in `.github/workflows/tests.yml` runs on a push to `main`
+with `needs: [lint, pytest]`, so it deploys only what passed. It never runs for
+pull requests. A separate `workflow_run` workflow was dropped after the
+security scan: that trigger runs with secrets and is easy to point at a fork's
+code, while a job in the same run can only ever see `main`. The job uses the
+`production` environment and `permissions: contents: read`; its actions are
+pinned to commits and Wrangler to a version. Runs on `main` are not cancelled
+by newer pushes, so a deploy never stops halfway.
 
 It needs two repository secrets, set by the owner: `CLOUDFLARE_API_TOKEN`
 (the **Edit Cloudflare Workers** template, scoped to the account and the
