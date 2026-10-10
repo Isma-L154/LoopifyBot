@@ -47,7 +47,7 @@ Secrets are **never** committed. Create the `.env` directly on the host:
 
 ```bash
 cp .env.example .env
-nano .env            # fill in DISCORD_TOKEN (and GENIUS_TOKEN for !lyrics)
+nano .env            # fill in DISCORD_TOKEN (GENIUS_TOKEN is an optional lyrics fallback)
 sudo systemctl start loopify-bot
 sudo journalctl -u loopify-bot -f      # look for "Logged in as ..."
 ```
