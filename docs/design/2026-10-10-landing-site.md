@@ -180,7 +180,8 @@ record and certificate for the custom domain.
 ## Tests
 
 `tests/test_site.py`, in the existing `pytest` job. It parses the HTML with the
-standard library's `html.parser` and `xml.etree`.
+standard library's `html.parser`, and reads the sitemap's `<loc>` with a regular
+expression (semgrep flags `xml.etree`, and one URL does not need a parser).
 
 - **Command sync.** The set of `data-command` values equals the set of
   non-hidden commands the bot registers with every cog in `COGS` loaded — the
