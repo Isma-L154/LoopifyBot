@@ -3,9 +3,9 @@
 <img alt="LoopifyBot — music for your Discord voice channels" src="docs/brand/banner.png" width="880" />
 
 [![Tests](https://github.com/Isma-L154/LoopifyBot/actions/workflows/tests.yml/badge.svg)](https://github.com/Isma-L154/LoopifyBot/actions/workflows/tests.yml)
-![Python](https://img.shields.io/badge/Python-3.14-4338ca?logo=python&logoColor=white)
-![discord.py](https://img.shields.io/badge/discord.py-2.7-4338ca?logo=discord&logoColor=white)
-![FFmpeg](https://img.shields.io/badge/FFmpeg-audio-4338ca?logo=ffmpeg&logoColor=white)
+![Python](https://img.shields.io/badge/Python-3.14-ff8a1f?logo=python&logoColor=white)
+![discord.py](https://img.shields.io/badge/discord.py-2.7-ff8a1f?logo=discord&logoColor=white)
+![FFmpeg](https://img.shields.io/badge/FFmpeg-audio-ff8a1f?logo=ffmpeg&logoColor=white)
 [![License: MIT](https://img.shields.io/badge/License-MIT-22c55e)](LICENSE)
 
 **A self-hostable Discord music bot written in Python.**
