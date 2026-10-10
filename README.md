@@ -281,9 +281,12 @@ off, so the page exists on one host only.
   (`!volume` accepts 0–100, loop modes and effect names come from fixed lists),
   and search terms are passed to yt-dlp after `--`, so they are never read as
   options.
-- **Rate limiting:** effect changes are throttled to one every three seconds
-  per server, and `/` commands are only registered through the owner-only
-  `!sync`, because Discord rate-limits syncing.
+- **Rate limiting:** `!play`, which starts a yt-dlp process each time, takes
+  at most 3 calls per 5 seconds and one at a time per user
+  (`tests/test_rate_limits.py` triggers both limits). Effect changes are
+  throttled to one every three seconds per server, and `/` commands are only
+  registered through the owner-only `!sync`, because Discord rate-limits
+  syncing.
 - **Sandboxed service:** the systemd unit runs as an unprivileged user with
   `NoNewPrivileges`, `ProtectSystem=strict`, a read-only home, restricted
   address families, and caps of 768 MB of memory and 256 tasks
