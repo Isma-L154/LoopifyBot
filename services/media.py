@@ -215,8 +215,11 @@ async def is_public_url(url: str) -> bool:
     that does not resolve is refused too: there is nothing to play there, and
     it is not worth letting through to find out.
 
-    This does not follow redirects — yt-dlp does that itself — so it narrows
-    the exposure rather than closing it.
+    This does not follow redirects — yt-dlp does that itself — and the address
+    can change between this lookup and yt-dlp's, so on its own it narrows the
+    exposure rather than closing it. Under systemd the unit's IPAddressDeny
+    (deploy/install-units.sh) closes it in the kernel; this check remains the
+    quick, readable refusal and the only guard outside systemd.
     """
     host = urlsplit(url).hostname
     if not host:
