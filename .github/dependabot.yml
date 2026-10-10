@@ -5,6 +5,10 @@ updates:
     directory: /
     schedule:
       interval: weekly
+    # A hijacked release is usually caught and yanked within days; waiting a
+    # week keeps it out of CI and off the server. Security updates skip this.
+    cooldown:
+      default-days: 7
     ignore:
       # Deliberately unpinned and kept current on the server by a daily timer
       # (deploy/update-ytdlp.sh). Its floor only moves when YouTube requires a
@@ -18,6 +22,9 @@ updates:
     directory: /
     schedule:
       interval: weekly
+    # Same reasoning as pip.
+    cooldown:
+      default-days: 7
     groups:
       # One PR for all action bumps rather than one per action.
       actions:
