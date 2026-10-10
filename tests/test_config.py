@@ -203,3 +203,20 @@ def test_an_absolute_path_is_left_alone(tmp_path):
 @pytest.mark.parametrize("unset", [None, ""])
 def test_an_unset_path_stays_unset(unset):
     assert config.project_path(unset) == unset
+
+
+# -- validate ----------------------------------------------------------------
+
+def test_a_missing_genius_token_is_not_reported_as_broken_lyrics(caplog, monkeypatch):
+    """
+    !lyrics reads LRCLIB first and needs no key; Genius is only the fallback.
+    A warning that lyrics "will not work" sent every debugging session after a
+    real lyrics failure in the wrong direction.
+    """
+    monkeypatch.setattr(config, "DISCORD_TOKEN", "token")
+    monkeypatch.setattr(config, "GENIUS_TOKEN", None)
+    with caplog.at_level("DEBUG", logger="loopify"):
+        config.validate()
+    assert not [r for r in caplog.records if r.levelname == "WARNING"]
+    assert "will not work" not in caplog.text
+    assert "fallback" in caplog.text

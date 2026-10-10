@@ -90,8 +90,8 @@ def test_the_lookup_is_bounded(token):
 async def test_a_missing_token_gives_up_before_building_a_client(monkeypatch):
     """
     Without a token lyricsgenius falls back to $GENIUS_ACCESS_TOKEN and raises
-    KeyError, so the guard has to come first. config.validate() already warns
-    about this at startup; a user typing !lyrics should just get an answer.
+    KeyError, so the guard has to come first. config.validate() already logs
+    it at startup; a user typing !lyrics should just get an answer.
     """
     lyrics_api._client.cache_clear()
     monkeypatch.setattr(lyrics_api, "GENIUS_TOKEN", None)
