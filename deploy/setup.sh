@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# LoopifyBot — host provisioning script for Ubuntu 22.04/24.04, ARM or x86
+# LoopifyBot — host provisioning script for Ubuntu 24.04/26.04, ARM or x86
 # (a self-hosted machine or an EC2 instance).
 #
 # Idempotent: safe to re-run. Installs system deps, creates a Python venv,
@@ -16,16 +16,30 @@ APP_USER="${SUDO_USER:-$USER}"
 APP_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 VENV_DIR="$APP_DIR/.venv"
 SERVICE_NAME="loopify-bot"
+PYTHON="python3.14"
 
 echo "==> LoopifyBot setup"
 echo "    user : $APP_USER"
 echo "    dir  : $APP_DIR"
 
 # ── 1. System dependencies ────────────────────────────────────────────
-echo "==> Installing system packages (ffmpeg, python3, venv, git, unzip)..."
+echo "==> Installing system packages (ffmpeg, $PYTHON, venv, git, unzip)..."
 sudo apt-get update -y
+
+# Ubuntu 26.04 ships python3.14; 24.04 only has 3.12, so there it comes from
+# the deadsnakes PPA, installed alongside the system Python rather than over it.
+if ! apt-cache show "$PYTHON" >/dev/null 2>&1; then
+    echo "==> $PYTHON is not in this release's archive; adding the deadsnakes PPA..."
+    sudo DEBIAN_FRONTEND=noninteractive apt-get install -y software-properties-common
+    sudo add-apt-repository -y ppa:deadsnakes/ppa
+    # unattended-upgrades only installs from origins it is told about; without
+    # this the bot's interpreter would never get a security patch.
+    echo 'Unattended-Upgrade::Origins-Pattern { "origin=LP-PPA-deadsnakes,codename=${distro_codename}"; };' \
+        | sudo tee /etc/apt/apt.conf.d/52loopify-deadsnakes >/dev/null
+fi
+
 sudo DEBIAN_FRONTEND=noninteractive apt-get install -y \
-    ffmpeg python3 python3-venv python3-pip git unzip curl
+    ffmpeg "$PYTHON" "$PYTHON-venv" git unzip curl
 
 # ── 1b. Deno (JS runtime for yt-dlp's YouTube signature solving) ───────
 # YouTube's web clients require solving a JS "nsig" challenge; yt-dlp uses a
@@ -52,8 +66,17 @@ fi
 command -v deno >/dev/null 2>&1 && echo "==> Deno: $(deno --version | head -1)"
 
 # ── 2. Python virtual environment ─────────────────────────────────────
+# A venv is bound to the interpreter that built it, so one from another Python
+# (or one whose interpreter was removed) is rebuilt rather than reused. The bot
+# runs from it, so stop the bot first instead of deleting files under it.
+if [[ -d "$VENV_DIR" && "$("$VENV_DIR/bin/python" --version 2>&1)" != "$("$PYTHON" --version)" ]]; then
+    echo "==> Existing venv is on another Python; stopping $SERVICE_NAME and rebuilding it..."
+    sudo systemctl stop "$SERVICE_NAME" 2>/dev/null || true
+    rm -rf "$VENV_DIR"
+fi
+
 echo "==> Creating virtual environment..."
-python3 -m venv "$VENV_DIR"
+"$PYTHON" -m venv "$VENV_DIR"
 "$VENV_DIR/bin/pip" install --upgrade pip wheel
 "$VENV_DIR/bin/pip" install -r "$APP_DIR/requirements.txt"
 

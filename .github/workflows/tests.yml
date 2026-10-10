@@ -23,7 +23,7 @@ jobs:
 
       - uses: actions/setup-python@v7
         with:
-          python-version: "3.12"
+          python-version: "3.14"
           cache: pip
 
       - name: Install dependencies
@@ -43,10 +43,11 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # 3.12 is what Ubuntu 24.04 ships, which is what the bot is deployed on.
-        # 3.14 is the newest release, so a dependency that breaks on it shows
-        # up here rather than on the next OS upgrade.
-        python-version: ["3.12", "3.14"]
+        # 3.14 is both what the server runs (deploy/setup.sh) and the newest
+        # release. When a newer one ships, add it here so a dependency that
+        # breaks on it shows up before the server moves. The check name
+        # "pytest (3.14)" is a required check on main.
+        python-version: ["3.14"]
 
     steps:
       - uses: actions/checkout@v7

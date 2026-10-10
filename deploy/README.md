@@ -24,7 +24,7 @@ half of that.
 
 ## 1. Provision the host
 
-Any Ubuntu 24.04 machine works. **Clone** the repo — do not copy the files over.
+Any Ubuntu 24.04 or 26.04 machine works. **Clone** the repo — do not copy the files over.
 A git checkout is what makes `deploy/update.sh` work later, and what lets the bot
 report which commit it is running:
 
@@ -34,9 +34,16 @@ cd ~/LoopifyBot
 bash deploy/setup.sh
 ```
 
-`setup.sh` installs `ffmpeg` + Python + Deno, builds a venv, and registers two
-systemd units: the `loopify-bot` service and a daily `loopify-ytdlp-update`
+`setup.sh` installs `ffmpeg` + Python 3.14 + Deno, builds a venv, and registers
+two systemd units: the `loopify-bot` service and a daily `loopify-ytdlp-update`
 timer. It is idempotent, so re-running it is safe.
+
+Ubuntu 26.04 ships Python 3.14. On 24.04, whose system Python is 3.12,
+`setup.sh` adds the [deadsnakes PPA](https://launchpad.net/~deadsnakes/+archive/ubuntu/ppa)
+and installs `python3.14` next to the system Python, which stays as it is. It
+also adds the PPA to `unattended-upgrades`
+(`/etc/apt/apt.conf.d/52loopify-deadsnakes`), so the bot's interpreter gets
+security patches like the rest of the system.
 
 For an always-on box, also worth doing: ignore the lid if it is a laptop
 (`logind.conf.d`), mask the suspend targets, and enable `unattended-upgrades`.
@@ -74,6 +81,15 @@ the old configuration while the repo claimed otherwise.
 If the update added, removed or changed a command, send `!sync` again so the
 `/` menu matches.
 
+`update.sh` never changes the Python version. When a pull moves the bot to a new
+one (the `PYTHON` line in `setup.sh`), re-run `setup.sh`: it stops the bot and
+rebuilds the venv on the new interpreter. Then start the bot and check the
+version it logs:
+
+```bash
+bash deploy/setup.sh && sudo systemctl start loopify-bot
+```
+
 ### If the host was deployed by copying files instead of cloning
 
 `update.sh` refuses to run and tells you how to convert it in place:
@@ -99,7 +115,7 @@ sudo journalctl -u loopify-bot | grep "Running commit" | tail -1
 ```
 
 ```
-Running commit 1ea2431 — yt-dlp 2026.08.19, FFmpeg 6.1.1-3ubuntu5, Python 3.12.3
+Running commit 1ea2431 — yt-dlp 2026.08.19, FFmpeg 6.1.1-3ubuntu5, Python 3.14.8
 ```
 
 ## Keeping yt-dlp current — automatically
