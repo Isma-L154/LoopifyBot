@@ -1,12 +1,13 @@
 #!/usr/bin/env bash
 #
-# LoopifyBot — EC2 provisioning script (Ubuntu 22.04/24.04 on ARM t4g or x86).
+# LoopifyBot — host provisioning script for Ubuntu 22.04/24.04, ARM or x86
+# (a self-hosted machine or an EC2 instance).
 #
 # Idempotent: safe to re-run. Installs system deps, creates a Python venv,
 # installs requirements and registers a systemd service that keeps the bot
 # running, restarts it on failure and starts it on boot.
 #
-# Usage (as the default 'ubuntu' user, from the repo root):
+# Usage (as the user that owns the checkout, from the repo root):
 #   bash deploy/setup.sh
 #
 set -euo pipefail

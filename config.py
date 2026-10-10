@@ -125,6 +125,6 @@ def validate() -> None:
         sys.exit(1)
 
     if not GENIUS_TOKEN:
-        logging.getLogger("loopify").warning(
-            "GENIUS_TOKEN missing — the !lyrics command will not work."
+        logging.getLogger("loopify").info(
+            "GENIUS_TOKEN not set — lyrics come from LRCLIB only, with no Genius fallback."
         )

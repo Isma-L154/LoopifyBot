@@ -1,7 +1,9 @@
 """
-Lyrics service — Genius, via lyricsgenius.
+Lyrics service — Genius, via lyricsgenius. The fallback for songs LRCLIB
+(:mod:`services.synced_lyrics`) does not have.
 
-Required .env variable: ``GENIUS_TOKEN`` (see :mod:`config`).
+Optional .env variable: ``GENIUS_TOKEN`` (see :mod:`config`); without it every
+lookup returns None.
 """
 
 import asyncio
@@ -52,7 +54,7 @@ async def fetch(title: str, artist: str = "") -> Optional[dict[str, str]]:
     if not GENIUS_TOKEN:
         # Constructing a client without one makes lyricsgenius fall back to
         # $GENIUS_ACCESS_TOKEN and raise KeyError. config.validate() already
-        # warned about this at startup.
+        # logged this at startup.
         log.debug("No GENIUS_TOKEN configured; skipping lookup for %r", title)
         return None
 
