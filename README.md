@@ -3,6 +3,7 @@
 <img alt="LoopifyBot — a stereo for your voice channel" src="docs/brand/banner.png" width="880" />
 
 [![Tests](https://github.com/Isma-L154/LoopifyBot/actions/workflows/tests.yml/badge.svg)](https://github.com/Isma-L154/LoopifyBot/actions/workflows/tests.yml)
+[![Security](https://github.com/Isma-L154/LoopifyBot/actions/workflows/security.yml/badge.svg)](https://github.com/Isma-L154/LoopifyBot/actions/workflows/security.yml)
 ![Python](https://img.shields.io/badge/Python-3.14-ff8a1f?logo=python&logoColor=white)
 ![discord.py](https://img.shields.io/badge/discord.py-2.7-ff8a1f?logo=discord&logoColor=white)
 ![FFmpeg](https://img.shields.io/badge/FFmpeg-audio-ff8a1f?logo=ffmpeg&logoColor=white)
@@ -298,6 +299,10 @@ off, so the page exists on one host only.
   pip and GitHub Actions after a 7-day cooldown (security fixes skip it), and CI
   runs with `contents: read` permissions. Every action in CI is pinned to a
   commit, and no checkout leaves its token on disk for later steps.
+- **Continuous scanning:** [security.yml](.github/workflows/security.yml) runs
+  on every pull request and push to `main`: gitleaks over the full history,
+  semgrep, pip-audit on the resolved requirements (only PyNaCl's documented
+  advisories are ignored) and zizmor on the workflows.
 
 - **Website headers:** [site/public/_headers](site/public/_headers) sends a CSP
   of `default-src 'self'` with no `unsafe-inline` or `unsafe-eval`, plus
