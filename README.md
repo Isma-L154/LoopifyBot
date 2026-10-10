@@ -3,7 +3,7 @@
 <img alt="LoopifyBot — music for your Discord voice channels" src="docs/brand/banner.png" width="880" />
 
 [![Tests](https://github.com/Isma-L154/LoopifyBot/actions/workflows/tests.yml/badge.svg)](https://github.com/Isma-L154/LoopifyBot/actions/workflows/tests.yml)
-![Python](https://img.shields.io/badge/Python-3.12+-4338ca?logo=python&logoColor=white)
+![Python](https://img.shields.io/badge/Python-3.14-4338ca?logo=python&logoColor=white)
 ![discord.py](https://img.shields.io/badge/discord.py-2.7-4338ca?logo=discord&logoColor=white)
 ![FFmpeg](https://img.shields.io/badge/FFmpeg-audio-4338ca?logo=ffmpeg&logoColor=white)
 [![License: MIT](https://img.shields.io/badge/License-MIT-22c55e)](LICENSE)
@@ -132,13 +132,13 @@ timings, and from Genius only when LRCLIB has nothing. YouTube's player
 changes often, so `yt-dlp` is the one dependency left unpinned; on a server a
 daily timer keeps it current (see [Deployment](#deployment)).
 
-**Stack:** Python 3.12 · discord.py 2.7 · yt-dlp · FFmpeg · aiohttp · lyricsgenius · systemd
+**Stack:** Python 3.14 · discord.py 2.7 · yt-dlp · FFmpeg · aiohttp · lyricsgenius · systemd
 
 ## Running locally
 
 ### Requirements
 
-- Python 3.12 or newer
+- Python 3.14
 - FFmpeg on your `PATH`
 - A Discord bot token with the **Message Content** intent enabled, the only
   privileged intent the bot asks for
@@ -195,9 +195,9 @@ A few tests render audio through **real FFmpeg** to check the speed of the
 pitch filters, because a wrong filter string looks fine and only shows up as
 the wrong playback speed. They skip if FFmpeg is not installed.
 
-CI ([tests.yml](.github/workflows/tests.yml)) runs the lint and type check on
-Python 3.12, and the tests on 3.12 (what the server runs) and 3.14 (the
-newest), on every push to `main` and every pull request.
+CI ([tests.yml](.github/workflows/tests.yml)) runs the lint, the type check and
+the tests on Python 3.14, which is both what the server runs and the newest
+release, on every push to `main` and every pull request.
 
 ### Regenerating the banner
 
