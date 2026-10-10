@@ -19,6 +19,29 @@ UPDATER_NAME="loopify-ytdlp-update"
 # Whoever owns the checkout is who the bot runs as.
 APP_USER="$(stat -c '%U' "$APP_DIR")"
 
+# The bot may only reach the public internet. !play hands user links to yt-dlp,
+# which follows redirects and resolves DNS on its own, so the application's
+# check (services.media.is_public_url) cannot stop a link from ending up on
+# localhost or the LAN. The kernel refuses those connections no matter how the
+# address was reached. Covered: 0.0.0.0/8 (Linux routes it to the host itself),
+# loopback, link-local (cloud metadata lives there), RFC 1918, CGNAT,
+# benchmarking, multicast, and IPv6 ULA. tests/test_service_sandbox.py keeps it
+# covering every private range and no public one.
+PRIVATE_NETWORKS="0.0.0.0/8 127.0.0.0/8 ::1/128 169.254.0.0/16 fe80::/10 224.0.0.0/4 ff00::/8 10.0.0.0/8 100.64.0.0/10 172.16.0.0/12 192.168.0.0/16 198.18.0.0/15 fc00::/7"
+# DNS must still work, so the resolvers in resolv.conf are let back through.
+# On Ubuntu that is only the systemd-resolved stub, 127.0.0.53, which answers
+# DNS and nothing else.
+RESOLVERS="$(awk '$1 == "nameserver" { sub(/%.*/, "", $2); print $2 }' /etc/resolv.conf | tr '\n' ' ')"
+for resolver in $RESOLVERS; do
+    case "$resolver" in
+        127.*|::1) ;;
+        *) echo "!! DNS resolver $resolver is not on loopback: every service on that host stays reachable from the bot." >&2 ;;
+    esac
+done
+if [ -z "$RESOLVERS" ]; then
+    echo "!! No nameserver in /etc/resolv.conf; the bot will not be able to resolve names." >&2
+fi
+
 echo "==> Installing systemd units (user: $APP_USER, dir: $APP_DIR)"
 
 sudo tee "/etc/systemd/system/${SERVICE_NAME}.service" >/dev/null <<UNIT
@@ -63,6 +86,9 @@ RestrictSUIDSGID=true
 RestrictNamespaces=true
 LockPersonality=true
 RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+# Public internet only; see PRIVATE_NETWORKS above. Allow wins over Deny.
+IPAddressDeny=$PRIVATE_NETWORKS
+IPAddressAllow=$RESOLVERS
 # Cap resources so a runaway can't take down a small box.
 MemoryMax=768M
 TasksMax=256

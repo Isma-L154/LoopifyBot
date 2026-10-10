@@ -268,11 +268,15 @@ off, so the page exists on one host only.
   ([config.py](config.py)); the bot exits at startup when `DISCORD_TOKEN` is
   missing, `setup.sh` sets `.env` to `chmod 600`, and the log setup never
   prints tokens.
-- **No probing of private networks:** `!play` refuses a link unless every
-  address its host resolves to is public (`services.media.is_public_url`), so
-  a guild member cannot point the bot at your LAN or a cloud metadata
-  endpoint. Redirects are followed by yt-dlp and not re-checked, so this
-  narrows the exposure rather than closing it.
+- **No probing of private networks:** the systemd unit's `IPAddressDeny`
+  makes the kernel refuse every connection from the bot to loopback, the LAN,
+  container networks, link-local (cloud metadata), CGNAT and IPv6 ULA, however
+  the address was reached: a redirect or a DNS answer that changes after the
+  check makes no difference. Only the DNS resolvers in `/etc/resolv.conf` are
+  let back in. `tests/test_service_sandbox.py` keeps the list covering every
+  private range and no public one. On top of that, `!play` refuses a link whose
+  host resolves to a private address (`services.media.is_public_url`), which
+  is the only guard when the bot runs outside systemd.
 - **Input validation:** command arguments are typed and range-checked
   (`!volume` accepts 0–100, loop modes and effect names come from fixed lists),
   and search terms are passed to yt-dlp after `--`, so they are never read as
