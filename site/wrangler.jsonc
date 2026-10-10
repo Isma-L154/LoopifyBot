@@ -1,0 +1,18 @@
+{
+  "$schema": "https://unpkg.com/wrangler@4.141.0/config-schema.json",
+  "name": "loopify-site",
+  "compatibility_date": "2026-10-01",
+  "assets": {
+    "directory": "./public",
+    // Unknown paths get public/404.html with a real 404 status, so Search
+    // Console does not report them as soft 404s.
+    "not_found_handling": "404-page"
+  },
+  // The page must exist on one host only; a workers.dev copy would be indexed
+  // as a duplicate.
+  "workers_dev": false,
+  "preview_urls": false,
+  "routes": [
+    { "pattern": "loopify.cloudils.com", "custom_domain": true }
+  ]
+}

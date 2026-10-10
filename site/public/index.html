@@ -1,0 +1,239 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>LoopifyBot — a music bot for Discord voice channels</title>
+  <meta name="description" content="A free Discord music bot. Play YouTube and SoundCloud in your voice channel, with a shared queue, eight live audio effects and lyrics that follow the song.">
+  <link rel="canonical" href="https://loopify.cloudils.com/">
+  <meta name="theme-color" content="#ff8a1f">
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="LoopifyBot">
+  <meta property="og:url" content="https://loopify.cloudils.com/">
+  <meta property="og:title" content="LoopifyBot — a stereo for your Discord voice channel">
+  <meta property="og:description" content="Play YouTube and SoundCloud together, turn the knobs for bass, nightcore or 8D, and follow the lyrics live. Free.">
+  <meta property="og:image" content="https://loopify.cloudils.com/og.png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:alt" content="LoopifyBot drawn as a hi-fi deck, with an LCD showing the song and its lyrics">
+  <meta name="twitter:card" content="summary_large_image">
+
+  <link rel="preload" href="/fonts/ibm-plex-sans.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="/fonts/chakra-petch-600.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="/styles.css">
+  <script src="/app.js" defer></script>
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "SoftwareApplication",
+    "name": "LoopifyBot",
+    "description": "A Discord music bot: YouTube and SoundCloud playback, a shared queue, live audio effects and synced lyrics.",
+    "url": "https://loopify.cloudils.com/",
+    "applicationCategory": "MultimediaApplication",
+    "operatingSystem": "Discord",
+    "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" }
+  }
+  </script>
+</head>
+<body id="top">
+  <a class="skip" href="#main">Skip to content</a>
+
+  <header class="top">
+    <a class="logo" href="#top"><span class="led" aria-hidden="true"></span>LoopifyBot</a>
+    <nav aria-label="Sections">
+      <a href="#features">Features</a>
+      <a href="#commands">Commands</a>
+      <a href="#troubleshooting">FAQ</a>
+    </nav>
+    <a class="btn btn-amber" href="https://discord.com/oauth2/authorize?client_id=1411151372446863491&amp;permissions=36784128&amp;integration_type=0&amp;scope=bot+applications.commands">Add to Discord</a>
+  </header>
+
+  <main id="main">
+    <section class="intro" aria-labelledby="hero-title">
+      <h1 id="hero-title">A stereo for your voice channel</h1>
+      <div>
+        <p>Play anything from YouTube or SoundCloud, turn the knobs for bass, nightcore or 8D, and read the lyrics as the song sings them.</p>
+        <a class="btn btn-amber" href="https://discord.com/oauth2/authorize?client_id=1411151372446863491&amp;permissions=36784128&amp;integration_type=0&amp;scope=bot+applications.commands">Add to Discord</a>
+        <a class="btn btn-ghost" href="#commands">View commands</a>
+      </div>
+    </section>
+
+    <div class="deck" role="group" aria-label="Demo player">
+      <div class="lcd" aria-hidden="true">
+        <div class="lcd-meta"><span id="lcd-track">TRK 01/03 · FX OFF</span><span id="lcd-time">01:32 ▸ 03:41</span></div>
+        <div class="lcd-song" id="lcd-song">MIDNIGHT DRIVE — NEON COAST</div>
+        <div class="lcd-lyrics"><span class="lcd-past" id="lcd-past">we left the lights on</span><span id="lcd-now">▸ and the radio kept on singing</span></div>
+        <div class="vu" id="vu"><i class="lv-2"></i><i class="lv-4"></i><i class="lv-7"></i><i class="lv-6"></i><i class="lv-3"></i><i class="lv-6"></i><i class="lv-4"></i><i class="lv-2"></i><i class="lv-5"></i><i class="lv-3"></i><i class="lv-1"></i><i class="lv-4"></i><i class="lv-3"></i><i class="lv-5"></i></div>
+      </div>
+      <div class="deck-controls">
+        <div class="keys">
+          <button class="key" type="button" data-action="previous" aria-label="Previous demo song" disabled>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><polygon points="19 20 9 12 19 4"/><rect x="5" y="4" width="2" height="16"/></svg>
+          </button>
+          <button class="key key-on" type="button" data-action="toggle" aria-label="Pause the demo" disabled>
+            <svg class="icon-pause" viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>
+            <svg class="icon-play" viewBox="0 0 24 24" aria-hidden="true"><polygon points="7 4 19 12 7 20"/></svg>
+          </button>
+          <button class="key" type="button" data-action="next" aria-label="Next demo song" disabled>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><polygon points="5 4 15 12 5 20"/><rect x="17" y="4" width="2" height="16"/></svg>
+          </button>
+          <button class="key" type="button" data-action="stop" aria-label="Stop the demo" disabled>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="5" width="14" height="14"/></svg>
+          </button>
+        </div>
+        <div class="knobs">
+          <button class="knob" type="button" data-effect="bass" aria-pressed="false" disabled><span class="dial dial-a" aria-hidden="true"></span>Bass</button>
+          <button class="knob" type="button" data-effect="nightcore" aria-pressed="false" disabled><span class="dial dial-b" aria-hidden="true"></span>Nightcore</button>
+          <button class="knob" type="button" data-effect="8d" aria-pressed="false" disabled><span class="dial dial-c" aria-hidden="true"></span>8D</button>
+          <button class="knob" type="button" data-effect="echo" aria-pressed="false" disabled><span class="dial dial-a" aria-hidden="true"></span>Echo</button>
+        </div>
+      </div>
+      <p class="plate" aria-hidden="true">LOOPIFY · MODEL LB-1 · STEREO VOICE RECEIVER</p>
+      <p class="sr-only" id="deck-status" role="status"></p>
+    </div>
+
+    <div class="wrap">
+      <section id="features" aria-labelledby="features-title">
+        <p class="label">01 · Spec sheet</p>
+        <h2 id="features-title">What's in the box</h2>
+        <dl class="specs">
+          <div><dt>Sources</dt><dd>Search by name, or paste a YouTube, SoundCloud or playlist link. Start a search with <code>sc:</code> to look on SoundCloud.</dd></div>
+          <div><dt>Shared queue</dt><dd>One per server. Shuffle, move, remove, go back, loop a track or the whole queue.</dd></div>
+          <div><dt>Eight effects</dt><dd>Bass boost, heavy bass, nightcore, vaporwave, treble, echo, 8D and karaoke. Applied live, mid-song.</dd></div>
+          <div><dt>Synced lyrics</dt><dd>One message that follows the song line by line, and keeps up when an effect speeds it up.</dd></div>
+          <div><dt>Three ways to control</dt><dd><code>/</code> commands, <code>!</code> commands, and buttons on every Now Playing message.</dd></div>
+          <div><dt>Auto power-off</dt><dd>Leaves the voice channel after five minutes with nothing to play.</dd></div>
+        </dl>
+      </section>
+
+      <section id="setup" aria-labelledby="setup-title">
+        <p class="label">02 · Setup</p>
+        <h2 id="setup-title">Up and running in a minute</h2>
+        <ol class="steps">
+          <li><span class="step-n" aria-hidden="true">01</span><h3>Add it</h3><p>Press Add to Discord and pick your server. You need the Manage Server permission there.</p></li>
+          <li><span class="step-n" aria-hidden="true">02</span><h3>Join a voice channel</h3><p>The bot comes to whichever voice channel you are in when you ask for a song.</p></li>
+          <li><span class="step-n" aria-hidden="true">03</span><h3>Type /play</h3><p>A song name or a link. Suggestions show up while you type.</p></li>
+        </ol>
+        <p class="note">It asks to send messages and embeds, read message history, and connect, speak and use voice activity in voice channels. Nothing else.</p>
+      </section>
+
+      <section id="commands" aria-labelledby="commands-title">
+        <p class="label">03 · Controls</p>
+        <h2 id="commands-title">Every command</h2>
+        <p class="note">Every <code>/</code> command also works with <code>!</code> (<code>!play</code>, <code>!skip</code>…). Shortcuts like <code>!p</code> exist only with <code>!</code>.</p>
+
+        <div class="selector" id="selector" hidden>
+          <div class="selector-keys" role="group" aria-label="Command group">
+            <button class="key" type="button" data-group="playback" aria-pressed="true">Playback</button>
+            <button class="key" type="button" data-group="queue" aria-pressed="false">Queue</button>
+            <button class="key" type="button" data-group="audio" aria-pressed="false">Audio</button>
+            <button class="key" type="button" data-group="extras" aria-pressed="false">Extras</button>
+          </div>
+          <label class="sr-only" for="command-search">Search commands</label>
+          <input class="search" id="command-search" type="search" placeholder="> search" autocomplete="off" spellcheck="false">
+        </div>
+        <p class="empty" id="no-match" hidden>No command matches that search.</p>
+
+        <table class="commands" data-group="playback">
+          <caption>Playback</caption>
+          <thead><tr><th scope="col">Command</th><th scope="col">What it does</th><th scope="col">Shortcut</th></tr></thead>
+          <tbody>
+            <tr><td><code data-command="play">/play &lt;song or link&gt;</code></td><td>Play from YouTube (search, video or playlist), SoundCloud or a link. Start with <code>sc:</code> or <code>yt:</code> to pick the site.</td><td><code data-alias="p">!p</code></td></tr>
+            <tr><td><code data-command="pause">/pause</code></td><td>Pause the current track.</td><td></td></tr>
+            <tr><td><code data-command="resume">/resume</code></td><td>Resume playback.</td><td></td></tr>
+            <tr><td><code data-command="skip">/skip</code></td><td>Skip to the next track.</td><td></td></tr>
+            <tr><td><code data-command="previous">/previous</code></td><td>Go back to the previous track.</td><td><code data-alias="prev">!prev</code></td></tr>
+            <tr><td><code data-command="stop">/stop</code></td><td>Stop playback and leave the voice channel.</td><td><code data-alias="dc">!dc</code> <code data-alias="leave">!leave</code></td></tr>
+            <tr><td><code data-command="nowplaying">/nowplaying</code></td><td>Show the track that is playing.</td><td><code data-alias="np">!np</code> <code data-alias="current">!current</code></td></tr>
+          </tbody>
+        </table>
+
+        <table class="commands" data-group="queue">
+          <caption>Queue</caption>
+          <thead><tr><th scope="col">Command</th><th scope="col">What it does</th><th scope="col">Shortcut</th></tr></thead>
+          <tbody>
+            <tr><td><code data-command="queue">/queue [page]</code></td><td>Show the queue.</td><td><code data-alias="q">!q</code></td></tr>
+            <tr><td><code data-command="shuffle">/shuffle</code></td><td>Shuffle the queue.</td><td></td></tr>
+            <tr><td><code data-command="remove">/remove &lt;position&gt;</code></td><td>Remove a track by its position in the queue.</td><td></td></tr>
+            <tr><td><code data-command="move">/move &lt;from&gt; &lt;to&gt;</code></td><td>Move a track to another position.</td><td></td></tr>
+            <tr><td><code data-command="clear">/clear</code></td><td>Empty the queue. The current track keeps playing.</td><td></td></tr>
+            <tr><td><code data-command="loop">/loop [track|queue|off]</code></td><td>Loop the track or the whole queue, or turn looping off.</td><td></td></tr>
+            <tr><td><code data-command="autoplay">/autoplay</code></td><td>When the queue runs out, keep going with a related track.</td><td></td></tr>
+          </tbody>
+        </table>
+
+        <table class="commands" data-group="audio">
+          <caption>Audio</caption>
+          <thead><tr><th scope="col">Command</th><th scope="col">What it does</th><th scope="col">Shortcut</th></tr></thead>
+          <tbody>
+            <tr><td><code data-command="volume">/volume &lt;0-100&gt;</code></td><td>Set the playback volume.</td><td></td></tr>
+            <tr><td><code data-command="effect">/effect [name]</code></td><td>Apply an effect by name, or show the active one.</td><td></td></tr>
+            <tr><td><code data-command="effects">/effects</code></td><td>List every effect.</td><td></td></tr>
+            <tr><td><code data-command="reset">/reset</code></td><td>Remove all effects.</td><td><code data-alias="fxreset">!fxreset</code> <code data-alias="noeffect">!noeffect</code></td></tr>
+            <tr><td><code data-command="bass">!bass</code></td><td>Light bass boost.</td><td></td></tr>
+            <tr><td><code data-alias="bassboost">!bassboost</code></td><td>Heavy bass boost.</td><td></td></tr>
+            <tr><td><code data-alias="nightcore">!nightcore</code></td><td>Faster and higher (1.25×).</td><td></td></tr>
+            <tr><td><code data-alias="vaporwave">!vaporwave</code></td><td>Slower and lower (0.8×).</td><td></td></tr>
+            <tr><td><code data-alias="treble">!treble</code></td><td>Boost the high frequencies.</td><td></td></tr>
+            <tr><td><code data-alias="echo">!echo</code></td><td>Add an echo.</td><td></td></tr>
+            <tr><td><code data-alias="8d">!8d</code></td><td>Sound that circles your head. Use headphones.</td><td></td></tr>
+            <tr><td><code data-alias="karaoke">!karaoke</code></td><td>Remove the centre vocals.</td><td></td></tr>
+          </tbody>
+        </table>
+        <p class="note" data-group-note="audio">The effect shortcuts exist only with <code>!</code>. Under <code>/</code>, pick the effect from <code>/effect</code>. Effects can change once every three seconds per server.</p>
+
+        <table class="commands" data-group="extras">
+          <caption>Extras</caption>
+          <thead><tr><th scope="col">Command</th><th scope="col">What it does</th><th scope="col">Shortcut</th></tr></thead>
+          <tbody>
+            <tr><td><code data-command="lyrics">/lyrics [title - artist]</code></td><td>Follow the current song's lyrics live in one message, or look up a song by title.</td><td><code data-alias="ly">!ly</code></td></tr>
+            <tr><td><code data-command="help">/help</code></td><td>Show the full command list in Discord.</td><td></td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section id="troubleshooting" aria-labelledby="troubleshooting-title">
+        <p class="label">04 · Troubleshooting</p>
+        <h2 id="troubleshooting-title">If something's off</h2>
+        <div class="faq">
+          <details>
+            <summary><span class="code" aria-hidden="true">E-01</span><span>The bot joined, but I hear nothing</span></summary>
+            <p>Check that you haven't muted it or turned its user volume down on your side (right-click the bot, then User Volume), and that <code>/volume</code> isn't at 0. If an effect sounds wrong, <code>/reset</code> removes it.</p>
+          </details>
+          <details>
+            <summary><span class="code" aria-hidden="true">E-02</span><span>A YouTube song fails and gets skipped</span></summary>
+            <p>YouTube blocks some videos for bots. LoopifyBot says so in the channel and moves on to the next song. Try the same search on SoundCloud: <code>/play sc: song name</code>.</p>
+          </details>
+          <details>
+            <summary><span class="code" aria-hidden="true">E-03</span><span>The <code>/</code> commands don't show up</span></summary>
+            <p>Give Discord a minute after adding the bot, then restart the Discord app. The <code>!</code> commands work straight away.</p>
+          </details>
+          <details>
+            <summary><span class="code" aria-hidden="true">E-04</span><span>Does it keep any of my data?</span></summary>
+            <p>No. There is no database: the queue lives in memory and is gone when the bot leaves. It reads the channel's messages only to spot <code>!</code> commands.</p>
+          </details>
+          <details>
+            <summary><span class="code" aria-hidden="true">E-05</span><span>Is it free? Is it always on?</span></summary>
+            <p>Free, with nothing behind a paywall. It runs on a self-hosted server, so it is on most of the time, but there is no uptime guarantee.</p>
+          </details>
+          <details>
+            <summary><span class="code" aria-hidden="true">E-06</span><span>Can I run my own copy?</span></summary>
+            <p>Yes. It is open source under the MIT license, and the <a href="https://github.com/Isma-L154/LoopifyBot">repository</a> explains how to run it on your own machine, a home server or AWS.</p>
+          </details>
+        </div>
+      </section>
+    </div>
+  </main>
+
+  <footer class="foot">
+    <div class="foot-in">
+      <span class="foot-plate">LOOPIFY · MIT LICENSE</span>
+      <a href="https://github.com/Isma-L154/LoopifyBot">GitHub</a>
+      <a href="https://github.com/Isma-L154/LoopifyBot/issues">Report a bug</a>
+    </div>
+  </footer>
+</body>
+</html>

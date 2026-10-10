@@ -1,0 +1,13 @@
+# Applied by Cloudflare to every static response; this file is not served.
+# The page has no inline scripts or styles (tests/test_site.py enforces it), so
+# the CSP needs neither 'unsafe-inline' nor 'unsafe-eval'. img-src allows data:
+# for the SVG icons browsers may inline.
+/*
+  Content-Security-Policy: default-src 'self'; img-src 'self' data:; object-src 'none'; base-uri 'self'; form-action 'none'; frame-ancestors 'none'
+  Strict-Transport-Security: max-age=31536000
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin
+
+# Fonts never change under the same name, so browsers may keep them.
+/fonts/*
+  Cache-Control: public, max-age=31536000, immutable

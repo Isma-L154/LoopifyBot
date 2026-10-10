@@ -39,3 +39,9 @@ cookies.txt
 # Local assistant notes.
 CLAUDE.md
 .claude/
+
+# Local design-mockup sessions.
+.superpowers/
+
+# Local state from `wrangler dev` (site/).
+.wrangler/
