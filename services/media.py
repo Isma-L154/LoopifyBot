@@ -118,18 +118,28 @@ def _build_track(info: dict[str, Any], *, query: str = "") -> Track:
     }
 
 
+def is_url(query: str) -> bool:
+    """
+    Whether ``query`` is a link rather than search terms.
+
+    The one definition every caller shares: it decides whether the private
+    network check runs, so any second, stricter copy of it is a way around that
+    check. Case-insensitive, because yt-dlp accepts ``HTTP://`` as readily.
+    """
+    return query.lower().startswith(("http://", "https://"))
+
+
 def _first_thumb(info: dict[str, Any]) -> Optional[str]:
     thumbs = info.get("thumbnails") or []
     return thumbs[-1]["url"] if thumbs else None
 
 
-def _run(opts: dict[str, Any], target: str, *,
-         loop: asyncio.AbstractEventLoop) -> asyncio.Future[Any]:
+def _run(opts: dict[str, Any], target: str) -> asyncio.Future[Any]:
     """Run yt-dlp's blocking extract_info in a thread executor."""
     def _extract() -> Any:
         with yt_dlp.YoutubeDL(opts) as ydl:
             return ydl.extract_info(target, download=False)
-    return loop.run_in_executor(None, _extract)
+    return asyncio.get_running_loop().run_in_executor(None, _extract)
 
 
 def _search_target(query: str) -> tuple[str, bool]:
@@ -143,21 +153,19 @@ def _search_target(query: str) -> tuple[str, bool]:
     for prefix, engine in _SEARCH_PREFIXES.items():
         if lowered.startswith(prefix):
             return engine + query[len(prefix):].strip(), True
-    if query.startswith("http"):
-        return query, False          # a URL — extract it directly
+    if is_url(query):
+        return query, False          # extract it directly
     return f"ytsearch1:{query}", True
 
 
 # ── Public API ────────────────────────────────────────────────────────
 
-async def search(query: str, *,
-                 loop: Optional[asyncio.AbstractEventLoop] = None) -> Optional[Track]:
+async def search(query: str) -> Optional[Track]:
     """Resolve a single track from a search term or any supported URL."""
-    loop = loop or asyncio.get_event_loop()
     target, flat_ok = _search_target(query)
     opts = {**YTDL_OPTIONS, "extract_flat": flat_ok}
     try:
-        info = await _run(opts, target, loop=loop)
+        info = await _run(opts, target)
         info = _first_entry(info)
         return _build_track(info, query=query) if info else None
     except Exception as e:
@@ -165,13 +173,11 @@ async def search(query: str, *,
         return None
 
 
-async def search_many(query: str, limit: int = 5, *,
-                      loop: Optional[asyncio.AbstractEventLoop] = None) -> list[Track]:
+async def search_many(query: str, limit: int = 5) -> list[Track]:
     """Return up to ``limit`` YouTube search results (metadata only)."""
-    loop = loop or asyncio.get_event_loop()
     opts = {**YTDL_OPTIONS, "extract_flat": True}
     try:
-        info = await _run(opts, f"ytsearch{limit}:{query}", loop=loop)
+        info = await _run(opts, f"ytsearch{limit}:{query}")
         entries = (info or {}).get("entries", [])
         return [_build_track(e, query=query) for e in entries if e]
     except Exception as e:
@@ -179,13 +185,11 @@ async def search_many(query: str, limit: int = 5, *,
         return []
 
 
-async def get_playlist(url: str, *,
-                       loop: Optional[asyncio.AbstractEventLoop] = None) -> list[Track]:
+async def get_playlist(url: str) -> list[Track]:
     """Extract every track from a playlist/set/album URL (metadata only)."""
-    loop = loop or asyncio.get_event_loop()
     opts = {**YTDL_OPTIONS, "noplaylist": False, "extract_flat": True}
     try:
-        info = await _run(opts, url, loop=loop)
+        info = await _run(opts, url)
         entries = (info or {}).get("entries", [])
         return [_build_track(e) for e in entries if e]
     except Exception as e:
@@ -193,13 +197,12 @@ async def get_playlist(url: str, *,
         return []
 
 
-async def related(track: Track, *,
-                  loop: Optional[asyncio.AbstractEventLoop] = None) -> Optional[Track]:
+async def related(track: Track) -> Optional[Track]:
     """Approximate a 'related' track for autoplay via a themed search."""
     seed = track.get("uploader") or track.get("title") or ""
     if not seed:
         return None
-    for cand in await search_many(f"{seed} mix", limit=5, loop=loop):
+    for cand in await search_many(f"{seed} mix", limit=5):
         if cand.get("url") and cand["url"] != track.get("url"):
             return cand
     return None

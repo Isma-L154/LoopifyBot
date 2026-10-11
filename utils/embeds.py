@@ -63,6 +63,8 @@ def queue_embed(queue: list[Track], current: Optional[Track], page: int = 1,
             inline=False,
         )
 
+    total_pages = max(1, (len(queue) + per_page - 1) // per_page)
+    page = max(1, min(page, total_pages))
     start = (page - 1) * per_page
     page_items = queue[start:start + per_page]
     if page_items:
@@ -75,7 +77,6 @@ def queue_embed(queue: list[Track], current: Optional[Track], page: int = 1,
         value = "*Queue is empty*"
     embed.add_field(name="⏭ Up Next", value=value, inline=False)
 
-    total_pages = max(1, (len(queue) + per_page - 1) // per_page)
     embed.set_footer(text=f"Page {page}/{total_pages} • {len(queue)} tracks in queue")
     return embed
 

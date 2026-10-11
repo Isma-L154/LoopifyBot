@@ -12,6 +12,8 @@ from typing import Any
 
 import aiohttp
 
+from services.media import is_url
+
 log = logging.getLogger("loopify.suggestions")
 
 SUGGEST_URL = "https://suggestqueries.google.com/complete/search"
@@ -23,7 +25,7 @@ MAX_CHOICE_LEN = 100        # Discord's cap on a choice's name and value
 async def fetch(session: aiohttp.ClientSession, query: str) -> list[str]:
     """Up to MAX_SUGGESTIONS search terms completing ``query``."""
     query = query.strip()
-    if not query or query.startswith("http"):
+    if not query or is_url(query):
         return []
     try:
         async with session.get(

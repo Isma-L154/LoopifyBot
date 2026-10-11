@@ -155,13 +155,28 @@ async def test_play_rejects_an_over_length_query(music_cog, ctx):
 @pytest.mark.parametrize("url", [
     "http://192.168.1.1/admin",
     "http://127.0.0.1:8080/",
+    # yt-dlp lowercases the scheme itself, so case must not skip the check —
+    # least of all on the playlist path, whose own detection ignores case.
+    "HTTP://192.168.1.1/admin",
+    "Http://10.0.0.1/playlist?list=PL123",
+    "HTTPS://10.0.0.1/sets/x",
 ])
 async def test_play_refuses_links_into_private_networks(music_cog, ctx, url):
     ctx.author.voice.channel = MagicMock()
-    with patch("cogs.music.media.search", new=AsyncMock()) as search:
+    with patch("cogs.music.media.search", new=AsyncMock()) as search, \
+         patch("cogs.music.media.get_playlist", new=AsyncMock()) as playlist:
         await Music.play.callback(music_cog, ctx, query=url)
     assert "public" in sent_text(ctx)
     search.assert_not_awaited()
+    playlist.assert_not_awaited()
+
+
+async def test_play_does_not_mistake_a_search_for_a_link(music_cog, ctx):
+    music_cog._ensure_voice = AsyncMock(return_value=False)
+    with patch("cogs.music.media.is_public_url", new=AsyncMock()) as check:
+        await Music.play.callback(music_cog, ctx, query="httpster live")
+    check.assert_not_awaited()
+    music_cog._ensure_voice.assert_awaited_once()
 
 
 async def test_shuffle_on_an_empty_queue(music_cog, ctx):
@@ -366,9 +381,8 @@ async def test_effect_by_name_applies_it(effects_cog, ctx):
     ctx.author.voice.channel = ctx.voice_client
     with patch.object(effects_cog, "_switch_to", new=AsyncMock()) as switch:
         await Effects.effect.callback(effects_cog, ctx, "Nightcore")
-    name, flt, _label, rate = switch.await_args.args[1:]
-    assert name == "nightcore" and flt == EFFECTS["nightcore"].filter
-    assert rate == EFFECTS["nightcore"].rate
+    name, effect = switch.await_args.args[1:]
+    assert name == "nightcore" and effect is EFFECTS["nightcore"]
 
 
 async def test_an_unknown_effect_name_is_refused(effects_cog, ctx):
@@ -390,3 +404,31 @@ async def test_effects_list_under_slash_points_at_effect(effects_cog, ctx):
     await Effects.list_effects.callback(effects_cog, ctx)
     text = sent_text(ctx)
     assert "/effect" in text and "`/bass`" not in text
+
+
+# -- what the read-only commands show -----------------------------------
+
+async def test_nowplaying_credits_whoever_queued_the_track(music_cog, ctx, fake_bot,
+                                                           fake_guild, track_factory):
+    queued_by = MagicMock(mention="<@queued-by>")
+    player = players.get_or_create(fake_bot, ctx.guild, ctx.channel)
+    try:
+        player.current = track_factory("Song", requester=queued_by)
+        ctx.author.mention = "<@asked-for-np>"
+        await Music.nowplaying.callback(music_cog, ctx)
+    finally:
+        players.discard(fake_guild.id)
+    embed = ctx.send.await_args.kwargs["embed"]
+    requested = next(f.value for f in embed.fields if "Requested" in f.name)
+    assert requested == "<@queued-by>"
+
+
+@pytest.mark.parametrize("page,shown", [(0, 1), (-1, 1), (99, 3)])
+def test_queue_pages_out_of_range_show_the_nearest_real_one(track_factory, page, shown):
+    from utils.embeds import queue_embed
+
+    queue = [track_factory(f"T{i}") for i in range(1, 26)]       # three pages
+    embed = queue_embed(queue, None, page=page)
+    assert embed.footer.text.startswith(f"Page {shown}/3")
+    first = (shown - 1) * 10 + 1
+    assert embed.fields[0].value.startswith(f"`{first}.` **T{first}**")

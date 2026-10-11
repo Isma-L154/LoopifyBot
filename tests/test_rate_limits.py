@@ -1,6 +1,7 @@
 """
 `!play` is the expensive path — every call starts a yt-dlp process on a small
-host — so its limits must hold, not just exist.
+host — and `!lyrics` calls out to two third-party APIs, so their limits must
+hold, not just exist.
 
 The command tests call ``.callback()``, which skips discord.py's limiter. These
 run the two steps ``Command.prepare`` runs before every invocation: the
@@ -13,6 +14,7 @@ from unittest.mock import MagicMock
 import pytest
 from discord.ext import commands
 
+from cogs.lyrics import Lyrics
 from cogs.music import Music
 
 PLAY = Music.play
@@ -70,3 +72,14 @@ async def test_one_play_at_a_time_per_user():
     await limit.acquire(ctx_for(2, 1))   # another user may play
     await limit.release(first)
     await limit.acquire(ctx_for(1, 2))   # free again once done
+
+
+def test_lyrics_is_limited_per_user():
+    """Each lookup can reach LRCLIB and Genius up to twice; spam must not."""
+    lyrics = Lyrics.lyrics
+    lyrics._buckets._cache.clear()
+    for second in (0, 1, 2):
+        lyrics._prepare_cooldowns(ctx_for(1, second))
+    with pytest.raises(commands.CommandOnCooldown):
+        lyrics._prepare_cooldowns(ctx_for(1, 3))
+    lyrics._prepare_cooldowns(ctx_for(2, 3))     # someone else is unaffected

@@ -283,8 +283,9 @@ off, so the page exists on one host only.
   and search terms are passed to yt-dlp after `--`, so they are never read as
   options.
 - **Rate limiting:** `!play`, which starts a yt-dlp process each time, takes
-  at most 3 calls per 5 seconds and one at a time per user
-  (`tests/test_rate_limits.py` triggers both limits). Effect changes are
+  at most 3 calls per 5 seconds and one at a time per user, and `!lyrics`,
+  which calls LRCLIB and Genius, at most 3 per 10 seconds per user
+  (`tests/test_rate_limits.py` triggers each limit). Effect changes are
   throttled to one every three seconds per server, and `/` commands are only
   registered through the owner-only `!sync`, because Discord rate-limits
   syncing.

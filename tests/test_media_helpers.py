@@ -45,6 +45,16 @@ def test_urls_are_passed_through_untouched(url):
     assert flat_ok is False, "a URL must be extracted directly, not flat-listed"
 
 
+def test_url_detection_ignores_the_case_of_the_scheme():
+    target, flat_ok = media._search_target("HTTPS://www.youtube.com/watch?v=abc")
+    assert target == "HTTPS://www.youtube.com/watch?v=abc"
+    assert flat_ok is False
+
+
+def test_a_word_starting_with_http_is_a_search_not_a_link():
+    assert media._search_target("httpster live") == ("ytsearch1:httpster live", True)
+
+
 def test_a_prefix_wins_over_url_detection():
     """`sc: https://...` should search SoundCloud, not extract the URL."""
     target, _ = media._search_target("sc: https://example.invalid/x")
