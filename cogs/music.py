@@ -30,9 +30,9 @@ VOICE_CONNECT_TIMEOUT = 20.0
 
 def _is_playlist_url(query: str) -> bool:
     """Detect playlist/set/album URLs across supported sites."""
-    q = query.lower()
-    if not q.startswith("http"):
+    if not media.is_url(query):
         return False
+    q = query.lower()
     if "list=" in q and "watch?v=" not in q:
         return True                        # YouTube playlist
     return "/sets/" in q or "/album/" in q  # SoundCloud set / Bandcamp album
@@ -110,7 +110,7 @@ class Music(commands.Cog, name="🎵 Music & Queue"):
         if len(query) > MAX_QUERY_LEN:
             await ctx.send(embed=error_embed("That query is too long."))
             return
-        if query.startswith("http") and not await media.is_public_url(query):
+        if media.is_url(query) and not await media.is_public_url(query):
             await ctx.send(embed=error_embed(
                 "I can only play links to public websites."))
             return

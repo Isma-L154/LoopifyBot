@@ -118,6 +118,17 @@ def _build_track(info: dict[str, Any], *, query: str = "") -> Track:
     }
 
 
+def is_url(query: str) -> bool:
+    """
+    Whether ``query`` is a link rather than search terms.
+
+    The one definition every caller shares: it decides whether the private
+    network check runs, so any second, stricter copy of it is a way around that
+    check. Case-insensitive, because yt-dlp accepts ``HTTP://`` as readily.
+    """
+    return query.lower().startswith(("http://", "https://"))
+
+
 def _first_thumb(info: dict[str, Any]) -> Optional[str]:
     thumbs = info.get("thumbnails") or []
     return thumbs[-1]["url"] if thumbs else None
@@ -143,8 +154,8 @@ def _search_target(query: str) -> tuple[str, bool]:
     for prefix, engine in _SEARCH_PREFIXES.items():
         if lowered.startswith(prefix):
             return engine + query[len(prefix):].strip(), True
-    if query.startswith("http"):
-        return query, False          # a URL — extract it directly
+    if is_url(query):
+        return query, False          # extract it directly
     return f"ytsearch1:{query}", True
 
 

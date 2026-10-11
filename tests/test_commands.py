@@ -155,13 +155,28 @@ async def test_play_rejects_an_over_length_query(music_cog, ctx):
 @pytest.mark.parametrize("url", [
     "http://192.168.1.1/admin",
     "http://127.0.0.1:8080/",
+    # yt-dlp lowercases the scheme itself, so case must not skip the check —
+    # least of all on the playlist path, whose own detection ignores case.
+    "HTTP://192.168.1.1/admin",
+    "Http://10.0.0.1/playlist?list=PL123",
+    "HTTPS://10.0.0.1/sets/x",
 ])
 async def test_play_refuses_links_into_private_networks(music_cog, ctx, url):
     ctx.author.voice.channel = MagicMock()
-    with patch("cogs.music.media.search", new=AsyncMock()) as search:
+    with patch("cogs.music.media.search", new=AsyncMock()) as search, \
+         patch("cogs.music.media.get_playlist", new=AsyncMock()) as playlist:
         await Music.play.callback(music_cog, ctx, query=url)
     assert "public" in sent_text(ctx)
     search.assert_not_awaited()
+    playlist.assert_not_awaited()
+
+
+async def test_play_does_not_mistake_a_search_for_a_link(music_cog, ctx):
+    music_cog._ensure_voice = AsyncMock(return_value=False)
+    with patch("cogs.music.media.is_public_url", new=AsyncMock()) as check:
+        await Music.play.callback(music_cog, ctx, query="httpster live")
+    check.assert_not_awaited()
+    music_cog._ensure_voice.assert_awaited_once()
 
 
 async def test_shuffle_on_an_empty_queue(music_cog, ctx):
