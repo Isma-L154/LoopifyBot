@@ -58,6 +58,8 @@ EFFECTS: dict[str, Effect] = {
 # `ctx.invoked_with` says which name the user actually typed.
 _EFFECT_NAMES = list(EFFECTS)
 
+_NO_EFFECT = Effect("", "Audio effects removed ✅")
+
 
 class Effects(commands.Cog, name="🎛️ Audio Effects"):
     def __init__(self, bot: commands.Bot) -> None:
@@ -71,8 +73,7 @@ class Effects(commands.Cog, name="🎛️ Audio Effects"):
         self._last_change[ctx.guild.id] = now
         return False
 
-    async def _switch_to(self, ctx: GuildContext, name: str | None, filter_str: str, label: str,
-                         rate: float = 1.0) -> None:
+    async def _switch_to(self, ctx: GuildContext, name: Optional[str], effect: Effect) -> None:
         """Throttle, apply, and report — the whole path every effect command takes."""
         if self._throttled(ctx):
             await ctx.send(embed=error_embed(
@@ -80,8 +81,8 @@ class Effects(commands.Cog, name="🎛️ Audio Effects"):
             ), ephemeral=True)
             return
         player = players.get(ctx.guild.id)
-        if player and player.apply_effect(name, filter_str, rate):
-            await ctx.send(embed=success_embed(label))
+        if player and player.apply_effect(name, effect.filter, effect.rate):
+            await ctx.send(embed=success_embed(effect.label))
         else:
             await ctx.send(embed=error_embed("Nothing is playing."), ephemeral=True)
 
@@ -92,14 +93,13 @@ class Effects(commands.Cog, name="🎛️ Audio Effects"):
     async def apply_effect(self, ctx: GuildContext) -> None:
         # Always set here: this callback only runs when invoked by one of its names.
         name = (ctx.invoked_with or _EFFECT_NAMES[0]).lower()
-        effect = EFFECTS[name]
-        await self._switch_to(ctx, name, effect.filter, effect.label, effect.rate)
+        await self._switch_to(ctx, name, EFFECTS[name])
 
     @hybrid_command(name="reset", aliases=["fxreset", "noeffect"])
     @same_voice_channel()
     async def reset_effect(self, ctx: GuildContext) -> None:
         """Remove all audio effects."""
-        await self._switch_to(ctx, None, "", "Audio effects removed ✅")
+        await self._switch_to(ctx, None, _NO_EFFECT)
 
     @hybrid_command(name="effect")
     @app_commands.describe(name="The effect to apply; leave it out to see the active one")
@@ -118,7 +118,7 @@ class Effects(commands.Cog, name="🎛️ Audio Effects"):
                 f"Unknown effect `{name}`. See `{ctx.clean_prefix}effects`."), ephemeral=True)
             return
         if await in_same_voice_channel(ctx):
-            await self._switch_to(ctx, name, chosen.filter, chosen.label, chosen.rate)
+            await self._switch_to(ctx, name, chosen)
 
     @hybrid_command(name="effects")
     async def list_effects(self, ctx: GuildContext) -> None:

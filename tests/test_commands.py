@@ -381,9 +381,8 @@ async def test_effect_by_name_applies_it(effects_cog, ctx):
     ctx.author.voice.channel = ctx.voice_client
     with patch.object(effects_cog, "_switch_to", new=AsyncMock()) as switch:
         await Effects.effect.callback(effects_cog, ctx, "Nightcore")
-    name, flt, _label, rate = switch.await_args.args[1:]
-    assert name == "nightcore" and flt == EFFECTS["nightcore"].filter
-    assert rate == EFFECTS["nightcore"].rate
+    name, effect = switch.await_args.args[1:]
+    assert name == "nightcore" and effect is EFFECTS["nightcore"]
 
 
 async def test_an_unknown_effect_name_is_refused(effects_cog, ctx):
