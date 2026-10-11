@@ -81,7 +81,7 @@ class NowPlayingControls(discord.ui.View):
             f"{outcome.message} — {interaction.user.mention}"))
 
     async def _edit_in_place(self, interaction: discord.Interaction,
-                       outcome: controls.Outcome) -> None:
+                             outcome: controls.Outcome) -> None:
         if not outcome.ok:
             return await _private_error(interaction, outcome.message)
         await interaction.response.edit_message(embed=self.embed(), view=self)

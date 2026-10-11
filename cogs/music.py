@@ -5,6 +5,7 @@ from typing import Optional, cast
 import aiohttp
 import discord
 from discord import app_commands
+from discord.channel import VocalGuildChannel
 from discord.ext import commands
 
 from services import media, suggestions
@@ -36,6 +37,10 @@ def _is_playlist_url(query: str) -> bool:
     if "list=" in q and "watch?v=" not in q:
         return True                        # YouTube playlist
     return "/sets/" in q or "/album/" in q  # SoundCloud set / Bandcamp album
+
+
+def _has_listeners(channel: VocalGuildChannel) -> bool:
+    return any(not member.bot for member in channel.members)
 
 
 async def _reply(ctx: GuildContext, outcome: controls.Outcome) -> None:
@@ -322,9 +327,9 @@ class Music(commands.Cog, name="🎵 Music & Queue"):
             return
         if before.channel != vc.channel:
             return
-        if len([m for m in vc.channel.members if not m.bot]) == 0:
+        if not _has_listeners(vc.channel):
             await asyncio.sleep(60)
-            if vc.is_connected() and len([m for m in vc.channel.members if not m.bot]) == 0:
+            if vc.is_connected() and not _has_listeners(vc.channel):
                 player = players.get(member.guild.id)
                 if player:
                     player.destroy()

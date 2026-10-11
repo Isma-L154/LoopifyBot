@@ -240,7 +240,7 @@ class MusicPlayer:
         idle that long — the stream would then be dead by the time we wanted
         it. Live streams have no end to count back from, so they prefetch now.
         """
-        duration = (track or {}).get("duration")
+        duration = track.get("duration")
         if not duration:
             return None
         remaining = duration - self.elapsed - PREFETCH_LEAD_SECONDS
@@ -343,7 +343,7 @@ class MusicPlayer:
     def set_volume(self, vol: float) -> None:
         self.volume = vol
         vc = self.voice
-        if vc and vc.source and isinstance(vc.source, discord.PCMVolumeTransformer):
+        if vc and isinstance(vc.source, discord.PCMVolumeTransformer):
             vc.source.volume = vol
 
     # ── The single playback loop ──────────────────────────────────────
