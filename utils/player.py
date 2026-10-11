@@ -477,7 +477,7 @@ class MusicPlayer:
             return self.current, False
 
         if self.autoplay and prev:
-            nxt = await media.related(prev, loop=self.bot.loop)
+            nxt = await media.related(prev)
             if nxt:
                 self.current = nxt
                 return self.current, False

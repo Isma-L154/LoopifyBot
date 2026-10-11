@@ -120,13 +120,13 @@ class Music(commands.Cog, name="🎵 Music & Queue"):
 
         async with ctx.typing():
             if _is_playlist_url(query):
-                tracks = await media.get_playlist(query, loop=self.bot.loop)
+                tracks = await media.get_playlist(query)
                 if not tracks:
                     await ctx.send(embed=error_embed("Couldn't load that playlist."))
                     return
                 return await self._enqueue(ctx, player, tracks, "playlist")
 
-            track = await media.search(query, loop=self.bot.loop)
+            track = await media.search(query)
             if not track:
                 await ctx.send(embed=error_embed(f"No results found for `{query}`."))
                 return
