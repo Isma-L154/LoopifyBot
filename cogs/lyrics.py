@@ -310,6 +310,9 @@ class Lyrics(commands.Cog, name="\U0001f3a4 Lyrics"):
     # -- The command ---------------------------------------------------
 
     @hybrid_command(aliases=["ly"])
+    # One lookup is up to two LRCLIB and two Genius requests; spamming it would
+    # get the bot's address rate-limited by both.
+    @commands.cooldown(rate=3, per=10.0, type=commands.BucketType.user)
     async def lyrics(self, ctx: GuildContext, *,
                      query: Optional[str] = None) -> None:
         """Follow the lyrics of the current song, or look a song up."""
