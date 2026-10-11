@@ -224,7 +224,9 @@ class Music(commands.Cog, name="🎵 Music & Queue"):
         if not player or not player.current:
             await ctx.send(embed=error_embed("Nothing is playing right now."))
             return
-        await ctx.send(embed=now_playing_embed(player.current, ctx.author, loop_mode=player.loop_mode))
+        requester = player.current.get("requester") or ctx.me   # autoplay picks have none
+        await ctx.send(embed=now_playing_embed(player.current, requester,
+                                               loop_mode=player.loop_mode))
 
     @hybrid_command()
     @same_voice_channel()

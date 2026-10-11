@@ -405,3 +405,31 @@ async def test_effects_list_under_slash_points_at_effect(effects_cog, ctx):
     await Effects.list_effects.callback(effects_cog, ctx)
     text = sent_text(ctx)
     assert "/effect" in text and "`/bass`" not in text
+
+
+# -- what the read-only commands show -----------------------------------
+
+async def test_nowplaying_credits_whoever_queued_the_track(music_cog, ctx, fake_bot,
+                                                           fake_guild, track_factory):
+    queued_by = MagicMock(mention="<@queued-by>")
+    player = players.get_or_create(fake_bot, ctx.guild, ctx.channel)
+    try:
+        player.current = track_factory("Song", requester=queued_by)
+        ctx.author.mention = "<@asked-for-np>"
+        await Music.nowplaying.callback(music_cog, ctx)
+    finally:
+        players.discard(fake_guild.id)
+    embed = ctx.send.await_args.kwargs["embed"]
+    requested = next(f.value for f in embed.fields if "Requested" in f.name)
+    assert requested == "<@queued-by>"
+
+
+@pytest.mark.parametrize("page,shown", [(0, 1), (-1, 1), (99, 3)])
+def test_queue_pages_out_of_range_show_the_nearest_real_one(track_factory, page, shown):
+    from utils.embeds import queue_embed
+
+    queue = [track_factory(f"T{i}") for i in range(1, 26)]       # three pages
+    embed = queue_embed(queue, None, page=page)
+    assert embed.footer.text.startswith(f"Page {shown}/3")
+    first = (shown - 1) * 10 + 1
+    assert embed.fields[0].value.startswith(f"`{first}.` **T{first}**")
