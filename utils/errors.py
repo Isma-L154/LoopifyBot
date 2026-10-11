@@ -83,7 +83,7 @@ async def handle(ctx: commands.Context, error: Exception) -> None:
     # and stays in the log — a stack trace in the channel helps nobody — but
     # saying nothing at all is worse. A TypeError in !lyrics was logged and
     # never answered, and from the channel the bot simply looked dead.
-    log.warning("Error in command %s: %s", ctx.command, error, exc_info=error)
+    log.error("Error in command %s: %s", ctx.command, error, exc_info=error)
     await _reply(ctx, "Something went wrong on my side. It has been logged.")
 
 

@@ -149,6 +149,8 @@ async def test_an_unexpected_error_is_acknowledged_and_logged(ctx, caplog):
 
     assert "went wrong" in sent_text(ctx).lower()
     assert "something broke internally" in caplog.text, "the operator still needs it"
+    # A bug, not a user mistake: it must stand out from the warnings around it.
+    assert any(r.levelname == "ERROR" and r.exc_info for r in caplog.records)
 
 
 async def test_the_acknowledgement_leaks_no_internals(ctx):
