@@ -3,11 +3,16 @@
 # Update a deployed bot to the latest committed code and restart it.
 #
 # Usage, on the host:
-#   cd ~/LoopifyBot && bash deploy/update.sh
+#   cd ~/LoopifyBot && bash deploy/update.sh            # pull main
+#   cd ~/LoopifyBot && bash deploy/update.sh COMMIT     # fast-forward to COMMIT
+#
+# On ilserver4 it is not run by hand: deploy/install-ilserver4.sh feeds it to
+# bash on stdin with APP_DIR set, which is why APP_DIR can come from outside.
 #
 set -euo pipefail
 
-APP_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+TARGET="${1:-}"
+APP_DIR="${APP_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
 VENV_DIR="$APP_DIR/.venv"
 SERVICE_NAME="loopify-bot"
 
@@ -50,7 +55,12 @@ fi
 previous="$(git rev-parse HEAD)"
 
 echo "==> Fetching..."
-git pull --ff-only
+if [[ -n "$TARGET" ]]; then
+    git fetch --quiet origin main
+    git merge --quiet --ff-only "$TARGET"
+else
+    git pull --ff-only
+fi
 
 if [[ "$previous" == "$(git rev-parse HEAD)" ]]; then
     echo "==> Already up to date."
