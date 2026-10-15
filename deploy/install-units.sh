@@ -16,6 +16,7 @@ APP_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 VENV_DIR="$APP_DIR/.venv"
 SERVICE_NAME="loopify-bot"
 UPDATER_NAME="loopify-ytdlp-update"
+UPDATER_BIN="/usr/local/sbin/$UPDATER_NAME"
 # Whoever owns the checkout is who the bot runs as.
 APP_USER="$(stat -c '%U' "$APP_DIR")"
 
@@ -78,7 +79,10 @@ NoNewPrivileges=true
 PrivateTmp=true
 ProtectSystem=strict
 ProtectHome=read-only
-ReadWritePaths=$APP_DIR
+# Only the caches, and the cookies yt-dlp writes back. Never the code: the bot
+# parses untrusted media, and a bot that can rewrite main.py keeps whatever got
+# in across restarts.
+ReadWritePaths=$APP_DIR/.cache -$APP_DIR/cookies.txt
 ProtectKernelTunables=true
 ProtectKernelModules=true
 ProtectControlGroups=true
@@ -97,9 +101,16 @@ TasksMax=256
 WantedBy=multi-user.target
 UNIT
 
+# Owned by $APP_USER even when this runs as root: the bot writes nowhere else.
+sudo install -d -o "$APP_USER" -g "$APP_USER" -m 0755 "$APP_DIR/.cache"
+
 # yt-dlp is the one dependency that must NOT be pinned: YouTube changes its
 # player constantly and a stale build stops resolving videos within weeks.
-chmod +x "$APP_DIR/deploy/update-ytdlp.sh"
+#
+# The updater runs as root, so root runs a copy root owns. Run from the
+# checkout, it was a file $APP_USER can write, and so one step from anything
+# that ever runs as $APP_USER.
+sudo install -o root -g root -m 0755 "$APP_DIR/deploy/update-ytdlp.sh" "$UPDATER_BIN"
 
 sudo tee "/etc/systemd/system/${UPDATER_NAME}.service" >/dev/null <<UNIT
 [Unit]
@@ -110,7 +121,22 @@ Wants=network-online.target
 [Service]
 Type=oneshot
 # Runs as root to restart the service; drops to $APP_USER for the pip install.
-ExecStart=$APP_DIR/deploy/update-ytdlp.sh
+ExecStart=$UPDATER_BIN $APP_DIR
+# pip runs as $APP_USER, whose home is read-only here; without this it warns
+# on every run that its cache is unusable.
+Environment=PIP_NO_CACHE_DIR=1
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=$VENV_DIR
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+RestrictNamespaces=true
+LockPersonality=true
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
 UNIT
 
 sudo tee "/etc/systemd/system/${UPDATER_NAME}.timer" >/dev/null <<UNIT
