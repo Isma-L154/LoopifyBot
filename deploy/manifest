@@ -1,0 +1,11 @@
+# Read by ilserver4-deploy (Isma-L154/Project_ilserver4), which deploys main of
+# this repository to ilserver4.
+#
+# kind    path                              inputs: files, or directories ending in /
+#
+# auto runs when an input or the installer itself changes. ignore maps files no
+# installer reads. Tests, docs and site/ are not inputs: changing them must not
+# restart the bot.
+
+auto      deploy/install-ilserver4.sh       cogs/ services/ utils/ main.py config.py requirements.txt deploy/install-units.sh deploy/update.sh deploy/update-ytdlp.sh
+ignore    deploy/manifest deploy/README.md deploy/setup.sh deploy/launch_ec2.sh
