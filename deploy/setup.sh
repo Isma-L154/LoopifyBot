@@ -38,6 +38,23 @@ if ! apt-cache show "$PYTHON" >/dev/null 2>&1; then
         | sudo tee /etc/apt/apt.conf.d/52loopify-deadsnakes >/dev/null
 fi
 
+# The PPA is trusted for the interpreter and nothing else. Without this, a
+# package it published under a system name (openssl, openssh-server) with a
+# higher version would replace the system's, unattended and as root. Outside
+# the block above so that re-running this on a host that already has the PPA
+# writes it too.
+if compgen -G "/etc/apt/sources.list.d/deadsnakes-*" >/dev/null; then
+    sudo tee /etc/apt/preferences.d/loopify-deadsnakes >/dev/null <<'PIN'
+Package: python3.14 python3.14-* libpython3.14 libpython3.14-*
+Pin: release o=LP-PPA-deadsnakes
+Pin-Priority: 500
+
+Package: *
+Pin: release o=LP-PPA-deadsnakes
+Pin-Priority: -1
+PIN
+fi
+
 sudo DEBIAN_FRONTEND=noninteractive apt-get install -y \
     ffmpeg "$PYTHON" "$PYTHON-venv" git unzip curl
 
