@@ -8,11 +8,14 @@
 # else in the venv is upgraded here — the rest is pinned on purpose.
 #
 # Runs as root so it can restart the service, but drops to the app user for the
-# pip install so the venv does not end up owned by root.
+# pip install so the venv does not end up owned by root. install-units.sh
+# installs it as a root-owned copy and passes the checkout as the argument.
+#
+# Usage: loopify-ytdlp-update APP_DIR
 #
 set -euo pipefail
 
-APP_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+APP_DIR="${1:?usage: $0 APP_DIR}"
 VENV_DIR="$APP_DIR/.venv"
 SERVICE_NAME="loopify-bot"
 # The venv's owner is the user the bot runs as.

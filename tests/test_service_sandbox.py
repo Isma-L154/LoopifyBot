@@ -74,3 +74,26 @@ def test_only_the_dns_resolvers_are_let_back_in():
     allows = [line for line in bot_unit().splitlines() if line.startswith("IPAddressAllow=")]
     assert allows == ["IPAddressAllow=$RESOLVERS"]
     assert re.search(r'^RESOLVERS="\$\(awk .*/etc/resolv\.conf', script(), re.MULTILINE)
+
+
+def updater_unit() -> str:
+    blocks = re.findall(r"\$\{UPDATER_NAME\}\.service\" >/dev/null <<UNIT\n(.*?)\nUNIT",
+                        script(), re.DOTALL)
+    assert len(blocks) == 1, "the loopify-ytdlp-update unit was not found"
+    return blocks[0]
+
+
+def test_the_bot_cannot_write_its_own_code():
+    """A compromised bot that can rewrite the checkout survives restarts."""
+    writable = [line for line in bot_unit().splitlines() if line.startswith("ReadWritePaths=")]
+    assert writable == ["ReadWritePaths=$APP_DIR/.cache -$APP_DIR/cookies.txt"]
+
+
+def test_root_never_runs_a_file_from_the_checkout():
+    """The updater runs as root; anything it executes must be root-owned."""
+    unit = updater_unit()
+    assert "User=" not in unit, "the updater is expected to run as root"
+    assert "ExecStart=$UPDATER_BIN $APP_DIR" in unit.splitlines()
+    assert re.search(r'^UPDATER_BIN="/usr/local/sbin/', script(), re.MULTILINE)
+    assert re.search(r'sudo install -o root -g root -m 0755 .*update-ytdlp\.sh" "\$UPDATER_BIN"',
+                     script())
