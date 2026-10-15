@@ -101,7 +101,8 @@ TasksMax=256
 WantedBy=multi-user.target
 UNIT
 
-mkdir -p "$APP_DIR/.cache"
+# Owned by $APP_USER even when this runs as root: the bot writes nowhere else.
+sudo install -d -o "$APP_USER" -g "$APP_USER" -m 0755 "$APP_DIR/.cache"
 
 # yt-dlp is the one dependency that must NOT be pinned: YouTube changes its
 # player constantly and a stale build stops resolving videos within weeks.
