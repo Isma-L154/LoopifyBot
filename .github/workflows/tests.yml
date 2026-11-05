@@ -64,6 +64,9 @@ jobs:
           # Later steps run third-party code (pip install); none of it needs
           # the token, so it is not left in .git/config.
           persist-credentials: false
+          # tests/test_site.py compares each page's sitemap lastmod with the
+          # date of the last commit that changed it, which a shallow clone hides.
+          fetch-depth: 0
 
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:

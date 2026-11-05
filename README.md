@@ -196,9 +196,11 @@ Discord gateway and never calls yt-dlp. It covers:
 - synced lyrics, the line-following message and the Genius fallback;
 - startup and shutdown, including that a login survives a DNS outage and that
   the process stops within the time systemd allows;
-- the website: its command list matches the commands and aliases the bot
-  registers, it has nothing inline that its CSP would block, and every public
-  URL uses the custom domain (`tests/test_site.py`).
+- the website: the command lists on the home page and on `/commands` match
+  the commands and aliases the bot registers, every example runs the command
+  next to it, nothing is inline that its CSP would block, every public URL uses
+  the custom domain, and each page's sitemap `lastmod` is not older than the
+  last commit that changed it (`tests/test_site.py`).
 
 A few tests render audio through **real FFmpeg** to check the speed of the
 pitch filters, because a wrong filter string looks fine and only shows up as
