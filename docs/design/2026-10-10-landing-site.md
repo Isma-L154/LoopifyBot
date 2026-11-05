@@ -103,8 +103,9 @@ accessible name.
   `MultimediaApplication`, `operatingSystem` Discord, a free `Offer`). It is
   data, not script, so the CSP does not block it.
 - **`robots.txt`** allows everything and points to the sitemap.
-- **`sitemap.xml`** lists the one URL. No `lastmod`: Google ignores it unless it
-  stays accurate, and nothing would keep it accurate.
+- **`sitemap.xml`** lists `/` and `/commands` (added in #105), each with a
+  `lastmod`. Google ignores `lastmod` unless it stays accurate, so a test fails
+  when a page has a commit newer than its `lastmod`.
 - **`404.html`** in the same style (*E-404 · NO SIGNAL*), served with a real
   404 status, so Search Console does not report soft 404s.
 - **No duplicate hosts**: `workers_dev` and `preview_urls` are off, so the page
@@ -126,6 +127,7 @@ site/
 ├── wrangler.jsonc     # assets-only Worker, custom domain, 404 handling
 └── public/            # the only directory uploaded
     ├── index.html
+    ├── commands.html
     ├── 404.html
     ├── styles.css
     ├── app.js

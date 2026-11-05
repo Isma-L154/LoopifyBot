@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>LoopifyBot commands — every Discord music bot command, with examples</title>
+  <meta name="description" content="Every LoopifyBot command for Discord: play, skip, queue, loop, volume, eight audio effects and synced lyrics. One line each, with an example you can paste.">
+  <link rel="canonical" href="https://loopify.cloudils.com/commands"> <!-- nosemgrep: html.security.audit.missing-integrity.missing-integrity -- a canonical link names the page, the browser never fetches it -->
+  <meta name="theme-color" content="#ff8a1f">
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="LoopifyBot">
+  <meta property="og:url" content="https://loopify.cloudils.com/commands">
+  <meta property="og:title" content="LoopifyBot commands, with examples">
+  <meta property="og:description" content="Play, skip, queue, loop, volume, eight audio effects and synced lyrics: every LoopifyBot command in one list.">
+  <meta property="og:image" content="https://loopify.cloudils.com/og.png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:alt" content="LoopifyBot drawn as a hi-fi deck, with an LCD showing the song and its lyrics">
+  <meta name="twitter:card" content="summary_large_image">
+
+  <link rel="preload" href="/fonts/ibm-plex-sans.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="/fonts/chakra-petch-600.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body id="top">
+  <a class="skip" href="#main">Skip to content</a>
+
+  <header class="top">
+    <a class="logo" href="/"><span class="led" aria-hidden="true"></span>LoopifyBot</a>
+    <nav aria-label="Site">
+      <a href="/#features">Features</a>
+      <a href="/commands" aria-current="page">Commands</a>
+      <a href="/#troubleshooting">FAQ</a>
+    </nav>
+    <a class="btn btn-amber" href="https://discord.com/oauth2/authorize?client_id=1411151372446863491&amp;permissions=36784128&amp;integration_type=0&amp;scope=bot+applications.commands">Add to Discord</a>
+  </header>
+
+  <main id="main" class="wrap">
+    <section class="ref-intro" aria-labelledby="page-title">
+      <p class="label">Reference · Controls</p>
+      <h1 id="page-title">LoopifyBot commands</h1>
+      <p>Every command the bot understands, with an example you can paste into Discord. Every <code>/</code> command also works with <code>!</code> (<code>!play</code>, <code>!skip</code>…). Shortcuts like <code>!p</code> exist only with <code>!</code>.</p>
+      <nav class="jump" aria-label="Command groups">
+        <a class="key" href="#playback">Playback</a>
+        <a class="key" href="#queue">Queue</a>
+        <a class="key" href="#audio">Audio</a>
+        <a class="key" href="#extras">Extras</a>
+      </nav>
+    </section>
+
+    <section id="playback" aria-labelledby="playback-title">
+      <h2 id="playback-title">Playback</h2>
+      <table class="commands commands-ref">
+        <thead><tr><th scope="col">Command</th><th scope="col">What it does</th><th scope="col">Example</th></tr></thead>
+        <tbody>
+          <tr id="play"><td><code data-command="play">/play &lt;song or link&gt;</code></td><td>Play from YouTube (search, video or playlist), SoundCloud or a link. Start with <code>sc:</code> or <code>yt:</code> to pick the site. <span class="alias">Shortcut <code data-alias="p">!p</code></span></td><td><code data-example="play">/play sc: city pop mix</code></td></tr>
+          <tr id="pause"><td><code data-command="pause">/pause</code></td><td>Pause the current track.</td><td><code data-example="pause">/pause</code></td></tr>
+          <tr id="resume"><td><code data-command="resume">/resume</code></td><td>Resume playback.</td><td><code data-example="resume">/resume</code></td></tr>
+          <tr id="skip"><td><code data-command="skip">/skip</code></td><td>Skip to the next track.</td><td><code data-example="skip">!skip</code></td></tr>
+          <tr id="previous"><td><code data-command="previous">/previous</code></td><td>Go back to the previous track. <span class="alias">Shortcut <code data-alias="prev">!prev</code></span></td><td><code data-example="previous">!prev</code></td></tr>
+          <tr id="stop"><td><code data-command="stop">/stop</code></td><td>Stop playback and leave the voice channel. <span class="alias">Shortcuts <code data-alias="dc">!dc</code> <code data-alias="leave">!leave</code></span></td><td><code data-example="stop">!leave</code></td></tr>
+          <tr id="nowplaying"><td><code data-command="nowplaying">/nowplaying</code></td><td>Show the track that is playing. <span class="alias">Shortcuts <code data-alias="np">!np</code> <code data-alias="current">!current</code></span></td><td><code data-example="nowplaying">!np</code></td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section id="queue" aria-labelledby="queue-title">
+      <h2 id="queue-title">Queue</h2>
+      <table class="commands commands-ref">
+        <thead><tr><th scope="col">Command</th><th scope="col">What it does</th><th scope="col">Example</th></tr></thead>
+        <tbody>
+          <tr id="queue-command"><td><code data-command="queue">/queue [page]</code></td><td>Show the queue, ten tracks per page. <span class="alias">Shortcut <code data-alias="q">!q</code></span></td><td><code data-example="queue">/queue 2</code></td></tr>
+          <tr id="shuffle"><td><code data-command="shuffle">/shuffle</code></td><td>Shuffle the queue.</td><td><code data-example="shuffle">/shuffle</code></td></tr>
+          <tr id="remove"><td><code data-command="remove">/remove &lt;position&gt;</code></td><td>Remove a track by its position in the queue.</td><td><code data-example="remove">/remove 3</code></td></tr>
+          <tr id="move"><td><code data-command="move">/move &lt;from&gt; &lt;to&gt;</code></td><td>Move a track to another position.</td><td><code data-example="move">/move 5 1</code></td></tr>
+          <tr id="clear"><td><code data-command="clear">/clear</code></td><td>Empty the queue. The current track keeps playing.</td><td><code data-example="clear">/clear</code></td></tr>
+          <tr id="loop"><td><code data-command="loop">/loop [track|queue|off]</code></td><td>Loop the track or the whole queue, or turn looping off.</td><td><code data-example="loop">/loop queue</code></td></tr>
+          <tr id="autoplay"><td><code data-command="autoplay">/autoplay</code></td><td>When the queue runs out, keep going with a related track.</td><td><code data-example="autoplay">/autoplay</code></td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section id="audio" aria-labelledby="audio-title">
+      <h2 id="audio-title">Audio</h2>
+      <table class="commands commands-ref">
+        <thead><tr><th scope="col">Command</th><th scope="col">What it does</th><th scope="col">Example</th></tr></thead>
+        <tbody>
+          <tr id="volume"><td><code data-command="volume">/volume &lt;0-100&gt;</code></td><td>Set the playback volume.</td><td><code data-example="volume">/volume 60</code></td></tr>
+          <tr id="effect"><td><code data-command="effect">/effect [name]</code></td><td>Apply an effect by name, or show the active one.</td><td><code data-example="effect">/effect nightcore</code></td></tr>
+          <tr id="effects"><td><code data-command="effects">/effects</code></td><td>List every effect.</td><td><code data-example="effects">/effects</code></td></tr>
+          <tr id="reset"><td><code data-command="reset">/reset</code></td><td>Remove all effects. <span class="alias">Shortcuts <code data-alias="fxreset">!fxreset</code> <code data-alias="noeffect">!noeffect</code></span></td><td><code data-example="reset">!fxreset</code></td></tr>
+          <tr id="bass"><td><code data-command="bass">!bass</code></td><td>Light bass boost.</td><td><code data-example="bass">!bass</code></td></tr>
+          <tr id="bassboost"><td><code data-alias="bassboost">!bassboost</code></td><td>Heavy bass boost.</td><td><code data-example="bassboost">!bassboost</code></td></tr>
+          <tr id="nightcore"><td><code data-alias="nightcore">!nightcore</code></td><td>Faster and higher (1.25×).</td><td><code data-example="nightcore">!nightcore</code></td></tr>
+          <tr id="vaporwave"><td><code data-alias="vaporwave">!vaporwave</code></td><td>Slower and lower (0.8×).</td><td><code data-example="vaporwave">!vaporwave</code></td></tr>
+          <tr id="treble"><td><code data-alias="treble">!treble</code></td><td>Boost the high frequencies.</td><td><code data-example="treble">!treble</code></td></tr>
+          <tr id="echo"><td><code data-alias="echo">!echo</code></td><td>Add an echo.</td><td><code data-example="echo">!echo</code></td></tr>
+          <tr id="8d"><td><code data-alias="8d">!8d</code></td><td>Sound that circles your head. Use headphones.</td><td><code data-example="8d">!8d</code></td></tr>
+          <tr id="karaoke"><td><code data-alias="karaoke">!karaoke</code></td><td>Remove the centre vocals.</td><td><code data-example="karaoke">!karaoke</code></td></tr>
+        </tbody>
+      </table>
+      <p class="note">The effect shortcuts exist only with <code>!</code>. Under <code>/</code>, pick the effect from <code>/effect</code>. Effects can change once every three seconds per server.</p>
+    </section>
+
+    <section id="extras" aria-labelledby="extras-title">
+      <h2 id="extras-title">Extras</h2>
+      <table class="commands commands-ref">
+        <thead><tr><th scope="col">Command</th><th scope="col">What it does</th><th scope="col">Example</th></tr></thead>
+        <tbody>
+          <tr id="lyrics"><td><code data-command="lyrics">/lyrics [title - artist]</code></td><td>Follow the current song's lyrics live in one message, or look up a song by title. <span class="alias">Shortcut <code data-alias="ly">!ly</code></span></td><td><code data-example="lyrics">!ly midnight drive - neon coast</code></td></tr>
+          <tr id="help"><td><code data-command="help">/help</code></td><td>Show the full command list in Discord.</td><td><code data-example="help">/help</code></td></tr>
+        </tbody>
+      </table>
+      <p class="note">Something not working? See <a href="/#troubleshooting">troubleshooting</a>.</p>
+    </section>
+  </main>
+
+  <footer class="foot">
+    <div class="foot-in">
+      <span class="foot-plate">LOOPIFY · MIT LICENSE</span>
+      <a href="/">Home</a>
+      <a href="https://github.com/Isma-L154/LoopifyBot">GitHub</a>
+      <a href="https://github.com/Isma-L154/LoopifyBot/issues">Report a bug</a>
+      <a href="https://cloudils.com/">cloudils.com</a>
+    </div>
+  </footer>
+</body>
+</html>

@@ -258,6 +258,24 @@ h2 { font-size: clamp(1.6rem, 3.4vw, 2rem); margin-bottom: 24px; }
   .commands td:nth-child(2) { grid-row: 2; grid-column: 1 / -1; }
   .commands td:first-child code { white-space: normal; }
 }
+.commands .alias { display: block; margin-top: 2px; font-size: 0.875rem; color: var(--faint); }
+
+/* Commands page */
+.top nav a[aria-current="page"] { color: var(--ink); }
+.ref-intro { padding-top: 48px; }
+.ref-intro h1 { font-size: clamp(2.2rem, 5vw, 3.4rem); margin-bottom: 16px; }
+.ref-intro > p:not(.label) { color: var(--muted); max-width: 70ch; margin: 0; }
+.ref-intro code { color: var(--ink); }
+.jump { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 24px; }
+.jump .key { flex: 0 0 auto; padding: 0 16px; text-decoration: none; }
+.commands-ref th:last-child, .commands-ref td:last-child { text-align: left; white-space: normal; }
+.commands-ref td:last-child { width: 28%; }
+.commands-ref td:last-child code { color: var(--ink); }
+.commands-ref tr:target td { background: var(--panel); }
+@media (max-width: 640px) {
+  .commands-ref td:last-child { grid-row: 3; grid-column: 1 / -1; width: auto; }
+  .commands-ref td:last-child::before { content: "e.g. "; color: var(--faint); }
+}
 
 /* Troubleshooting */
 .faq details { border-bottom: 1px solid var(--line); }
