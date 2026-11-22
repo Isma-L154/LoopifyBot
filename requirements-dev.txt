@@ -2,7 +2,7 @@
 #   pip install -r requirements.txt -r requirements-dev.txt
 -r requirements.txt
 pytest>=9.2.0
-pytest-asyncio>=1.4.1
+pytest-asyncio>=1.5.0
 # Pinned: a new release of either can start failing CI on unchanged code.
 ruff==0.17.5
 mypy==2.4.1
